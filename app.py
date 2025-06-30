@@ -153,8 +153,8 @@ def generate_invoice(patient_id):
         pdf.add_patient_info(patient)
         pdf.add_invoice_table(items)
 
-        pdf_buffer = io.BytesIO()
-        pdf.output(pdf_buffer)
+        pdf_data = pdf.output(dest='S').encode('latin1')  # 'S' returns PDF as str; encode to bytes
+        pdf_buffer = io.BytesIO(pdf_data)
         pdf_buffer.seek(0)
 
         return send_file(
