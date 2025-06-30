@@ -1,9 +1,15 @@
 from flask import Flask, render_template, request, jsonify
 import sqlite3
+from fpdf import FPDF
+import base64
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.image import MIMEImage
+from flask import send_file
+import io
+from datetime import datetime
+import requests
 
 app = Flask(__name__)
 DATABASE = 'patients.db'
@@ -17,6 +23,151 @@ your_password = "ajrn mros lkzm urnu"
 
 acteur_inf = "jonathanjerabe@gmail.com"
 acteur_med = "cablarenaissance@gmail.com"
+
+# Function to get DB connection
+def get_db_connection():
+    conn = sqlite3.connect(DATABASE)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+# PDF generation using fpdf==1.7.2
+class InvoicePDF(FPDF):
+    def header(self):
+        # Add logo if possible
+        try:
+            logo_url = "https://allarassemjonathan.github.io/marate_white.png"
+            response = requests.get(logo_url, timeout=10)
+            if response.status_code == 200:
+                logo_buffer = io.BytesIO(response.content)
+                self.image(logo_buffer, 10, 8, 40)
+        except Exception as e:
+            print(f"Could not load logo: {e}")
+
+        self.set_font('Arial', 'B', 16)
+        self.set_text_color(6, 182, 212)
+        self.cell(0, 10, 'Devis Cabinet la Renaissance', border=False, ln=1, align='C')
+        self.ln(10)
+
+    def footer(self):
+        self.set_y(-15)
+        self.set_font('Arial', 'I', 8)
+        self.set_text_color(128)
+        self.cell(0, 10, f'Page {self.page_no()}', align='C')
+
+    def add_patient_info(self, patient):
+        self.set_font('Arial', '', 11)
+        self.set_text_color(0)
+
+        self.cell(100, 10, f"Nom: {patient['name']}", ln=0)
+        self.cell(90, 10, "Cabinet dentaire la renaissance", ln=1)
+
+        self.cell(100, 10, f"Adresse: {patient['adresse'] or 'N/A'}", ln=0)
+        self.cell(90, 10, "Kantara Sacko, Rue 22, Medina Dakar", ln=1)
+
+        self.cell(100, 10, f"Date de naissance: {patient['date_of_birth'] or 'N/A'}", ln=0)
+        self.cell(90, 10, "cablarenaissance@gmail.com", ln=1)
+
+        self.cell(100, 10, f"Date de facture: {datetime.now().strftime('%d/%m/%Y %H:%M')}", ln=0)
+        self.cell(90, 10, "(+221) 78 635 95 65", ln=1)
+        self.ln(5)
+
+    def add_invoice_table(self, items):
+        self.set_font('Arial', 'B', 11)
+        self.set_fill_color(6, 182, 212)
+        self.set_text_color(255)
+        headers = ['Article', 'Quantité', 'Prix Unitaire', 'Prix Total', 'Date']
+        col_widths = [40, 25, 35, 35, 40]
+
+        for i, header in enumerate(headers):
+            self.cell(col_widths[i], 10, header, 1, 0, 'C', 1)
+        self.ln()
+
+        self.set_font('Arial', '', 10)
+        self.set_text_color(0)
+
+        total_amount = 0
+        for item in items:
+            quantity = int(str(item['quantity']).replace(' ', ''))
+            price = int(str(item['price']).replace(' ', ''))
+            total_price = quantity * price
+            total_amount += total_price
+
+            row = [
+                str(item['name']),
+                str(quantity),
+                f"{price} Fcfa",
+                f"{total_price} Fcfa",
+                datetime.now().strftime('%d/%m/%Y')
+            ]
+            for i, datum in enumerate(row):
+                self.cell(col_widths[i], 10, datum, 1)
+            self.ln()
+
+        # Total row
+        self.set_font('Arial', 'B', 11)
+        self.cell(col_widths[0] + col_widths[1] + col_widths[2], 10, 'TOTAL:', 1)
+        self.cell(col_widths[3], 10, f"{total_amount} Fcfa", 1)
+        self.cell(col_widths[4], 10, '', 1)
+        self.ln(10)
+
+        # Insurance breakdown
+        insurance_amount = int(total_amount * 0.80)
+        patient_amount = total_amount - insurance_amount
+
+        self.set_font('Arial', '', 11)
+        self.cell(60, 10, f"Part Assureur (80%): {insurance_amount} Fcfa", ln=1)
+        self.cell(60, 10, f"Part Patient (20%): {patient_amount} Fcfa", ln=1)
+
+        self.ln(5)
+        self.set_font('Arial', 'B', 12)
+        self.set_text_color(220, 20, 60)
+        self.cell(0, 10, f"MONTANT À PAYER PAR LE PATIENT: {patient_amount} Fcfa", ln=1, align='C')
+
+
+@app.route('/generate_invoice/<int:patient_id>', methods=['POST'])
+def generate_invoice(patient_id):
+    try:
+        data = request.get_json()
+        if not data or 'items' not in data:
+            return jsonify({'status': 'error', 'message': 'Invoice items are required'}), 400
+
+        items = data['items']
+        for item in items:
+            if not all(key in item for key in ['name', 'quantity', 'price']):
+                return jsonify({'status': 'error', 'message': 'Each item must have name, quantity, and price'}), 400
+            try:
+                float(item['quantity'])
+                float(item['price'])
+            except (ValueError, TypeError):
+                return jsonify({'status': 'error', 'message': 'Quantity and price must be numeric'}), 400
+
+        conn = get_db_connection()
+        patient = conn.execute('SELECT rowid, * FROM patients WHERE rowid = ?', (patient_id,)).fetchone()
+        conn.close()
+
+        if not patient:
+            return jsonify({'status': 'error', 'message': 'Patient not found'}), 404
+
+        pdf = InvoicePDF()
+        pdf.add_page()
+        pdf.add_patient_info(patient)
+        pdf.add_invoice_table(items)
+
+        pdf_buffer = io.BytesIO()
+        pdf.output(pdf_buffer)
+        pdf_buffer.seek(0)
+
+        return send_file(
+            pdf_buffer,
+            as_attachment=True,
+            download_name=f'invoice_{patient["name"]}_{datetime.now().strftime("%Y%m%d_%H%M%S")}.pdf',
+            mimetype='application/pdf'
+        )
+
+    except Exception as e:
+        print(f"Error generating invoice: {str(e)}")
+        return jsonify({'status': 'error', 'message': 'Internal server error'}), 500
+
 
 def email_reception(firstname, lastname, body, plot, recipient_email):
 
