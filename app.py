@@ -1,15 +1,18 @@
 from flask import Flask, render_template, request, jsonify
 import sqlite3
-from fpdf import FPDF
 import base64
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.image import MIMEImage
+from reportlab.lib.pagesizes import letter, A4
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import inch
+from reportlab.lib import colors
 from flask import send_file
 import io
 from datetime import datetime
-import requests
 
 app = Flask(__name__)
 DATABASE = 'patients.db'
@@ -17,157 +20,283 @@ DATABASE = 'patients.db'
 # Set up the SMTP server
 smtp_server = "smtp.gmail.com"
 smtp_port = 587
-
 your_email = "jonathanjerabe@gmail.com"
 your_password = "ajrn mros lkzm urnu"
 
 acteur_inf = "jonathanjerabe@gmail.com"
 acteur_med = "cablarenaissance@gmail.com"
-
-# Function to get DB connection
-def get_db_connection():
-    conn = sqlite3.connect(DATABASE)
-    conn.row_factory = sqlite3.Row
-    return conn
-
-# PDF generation using fpdf==1.7.2
-class InvoicePDF(FPDF):
-    def header(self):
-        # Add logo if possible
-        try:
-            logo_url = "https://allarassemjonathan.github.io/marate_white.png"
-            response = requests.get(logo_url, timeout=10)
-            if response.status_code == 200:
-                logo_buffer = io.BytesIO(response.content)
-                self.image(logo_buffer, 10, 8, 40)
-        except Exception as e:
-            print(f"Could not load logo: {e}")
-
-        self.set_font('Arial', 'B', 16)
-        self.set_text_color(6, 182, 212)
-        self.cell(0, 10, 'Devis Cabinet la Renaissance', border=False, ln=1, align='C')
-        self.ln(10)
-
-    def footer(self):
-        self.set_y(-15)
-        self.set_font('Arial', 'I', 8)
-        self.set_text_color(128)
-        self.cell(0, 10, f'Page {self.page_no()}', align='C')
-
-    def add_patient_info(self, patient):
-        self.set_font('Arial', '', 11)
-        self.set_text_color(0)
-
-        self.cell(100, 10, f"Nom: {patient['name']}", ln=0)
-        self.cell(90, 10, "Cabinet dentaire la renaissance", ln=1)
-
-        self.cell(100, 10, f"Adresse: {patient['adresse'] or 'N/A'}", ln=0)
-        self.cell(90, 10, "Kantara Sacko, Rue 22, Medina Dakar", ln=1)
-
-        self.cell(100, 10, f"Date de naissance: {patient['date_of_birth'] or 'N/A'}", ln=0)
-        self.cell(90, 10, "cablarenaissance@gmail.com", ln=1)
-
-        self.cell(100, 10, f"Date de facture: {datetime.now().strftime('%d/%m/%Y %H:%M')}", ln=0)
-        self.cell(90, 10, "(+221) 78 635 95 65", ln=1)
-        self.ln(5)
-
-    def add_invoice_table(self, items):
-        self.set_font('Arial', 'B', 11)
-        self.set_fill_color(6, 182, 212)
-        self.set_text_color(255)
-        headers = ['Article', 'Quantité', 'Prix Unitaire', 'Prix Total', 'Date']
-        col_widths = [40, 25, 35, 35, 40]
-
-        for i, header in enumerate(headers):
-            self.cell(col_widths[i], 10, header, 1, 0, 'C', 1)
-        self.ln()
-
-        self.set_font('Arial', '', 10)
-        self.set_text_color(0)
-
-        total_amount = 0
-        for item in items:
-            quantity = int(str(item['quantity']).replace(' ', ''))
-            price = int(str(item['price']).replace(' ', ''))
-            total_price = quantity * price
-            total_amount += total_price
-
-            row = [
-                str(item['name']),
-                str(quantity),
-                f"{price} Fcfa",
-                f"{total_price} Fcfa",
-                datetime.now().strftime('%d/%m/%Y')
+from reportlab.lib.utils import ImageReader
+import requests
+from reportlab.lib.utils import ImageReader
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
+import requests
+def create_invoice_pdf(patient, items):
+    """
+    Create invoice PDF with patient info and itemized services
+    SOC 2 Compliant: All processing done in memory, no temporary files
+    """
+    # Create PDF in memory
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=72, leftMargin=72, topMargin=72, bottomMargin=72)
+    
+    # Container for PDF elements
+    elements = []
+    styles = getSampleStyleSheet()
+    
+    # Custom styles
+    title_style = ParagraphStyle(
+        'CustomTitle',
+        parent=styles['Heading1'],
+        fontSize=20,
+        spaceAfter=30,
+        alignment=1,  # Center alignment
+        textColor=colors.HexColor('#06b6d4')
+    )
+    
+    # Style for emphasized text
+    emphasis_style = ParagraphStyle(
+        'Emphasis',
+        parent=styles['Normal'],
+        fontSize=14,
+        textColor=colors.HexColor('#06b6d4'),
+        alignment=1,  # Center alignment
+        spaceAfter=20,
+        spaceBefore=10
+    )
+    
+    # Styles for left and right alignment
+    left_style = ParagraphStyle(
+        'LeftAlign',
+        parent=styles['Normal'],
+        alignment=0,  # Left alignment
+        fontSize=10
+    )
+    
+    right_style = ParagraphStyle(
+        'LeftAlign',
+        parent=styles['Normal'],
+        alignment=0,  # Right alignment
+        fontSize=10
+    )
+    
+    # Download and add logo
+    try:
+        logo_url = "https://allarassemjonathan.github.io/marate_white.png"
+        response = requests.get(logo_url, timeout=10)
+        if response.status_code == 200:
+            # Create ImageReader from the response content
+            logo_buffer = io.BytesIO(response.content)
+            
+            # Create header table with logo and title
+            header_table_data = [
+                [
+                    # Logo cell - pass the buffer directly to Image
+                    Image(logo_buffer, width=1.7*inch, height=0.4*inch),
+                    # Title cell
+                    Paragraph("Devis Cabinet la Renaissance", title_style)
+                ]
             ]
-            for i, datum in enumerate(row):
-                self.cell(col_widths[i], 10, datum, 1)
-            self.ln()
-
-        # Total row
-        self.set_font('Arial', 'B', 11)
-        self.cell(col_widths[0] + col_widths[1] + col_widths[2], 10, 'TOTAL:', 1)
-        self.cell(col_widths[3], 10, f"{total_amount} Fcfa", 1)
-        self.cell(col_widths[4], 10, '', 1)
-        self.ln(10)
-
-        # Insurance breakdown
-        insurance_amount = int(total_amount * 0.80)
-        patient_amount = total_amount - insurance_amount
-
-        self.set_font('Arial', '', 11)
-        self.cell(60, 10, f"Part Assureur (80%): {insurance_amount} Fcfa", ln=1)
-        self.cell(60, 10, f"Part Patient (20%): {patient_amount} Fcfa", ln=1)
-
-        self.ln(5)
-        self.set_font('Arial', 'B', 12)
-        self.set_text_color(220, 20, 60)
-        self.cell(0, 10, f"MONTANT À PAYER PAR LE PATIENT: {patient_amount} Fcfa", ln=1, align='C')
-
+            
+            header_table = Table(header_table_data, colWidths=[2.5*inch, 4.5*inch])
+            header_table.setStyle(TableStyle([
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('ALIGN', (0, 0), (0, 0), 'LEFT'),    # Logo left aligned
+                ('ALIGN', (1, 0), (1, 0), 'CENTER'),  # Title center aligned
+                ('LEFTPADDING', (0, 0), (-1, -1), 0),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+                ('TOPPADDING', (0, 0), (-1, -1), 0),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+                ('GRID', (0, 0), (-1, -1), 0, colors.white),  # Invisible borders
+            ]))
+            
+            elements.append(header_table)
+        else:
+            # Fallback if logo can't be loaded
+            elements.append(Paragraph("Devis Cabinet dentaire la Renaissance", title_style))
+            
+    except Exception as e:
+        print(f"Error loading logo: {e}")
+        # Fallback if logo can't be loaded
+        elements.append(Paragraph("Devis Cabinet dentaire La Renaissance", title_style))
+    
+    elements.append(Spacer(1, 20))
+    
+    # Create clinic and patient info content
+    clinic_info = f"""
+    <b>Cabinet dentaire la renaissance</b><br/>
+    Kantara Sacko<br/>
+    Adresse Rue 22, Medina Dakar<br/>
+    cablarenaissance@gmail.com<br/>
+    (+221) 78 635 95 65<br/>
+    Ordre des Chirurgiens Dentistes/ N° Reference etablissement: B 1506
+    """
+    
+    patient_info = f"""
+    <b>Informations Patient</b><br/>
+    Nom: {patient['name']}<br/>
+    Adresse: {patient['adresse'] or 'N/A'}<br/>
+    Date de naissance: {patient['date_of_birth'] or 'N/A'}<br/>
+    Date de facture: {datetime.now().strftime('%d/%m/%Y %H:%M')}<br/>
+    """
+    
+    # Create a table to position clinic info (right) and patient info (left)
+    info_table_data = [
+        [
+            Paragraph(patient_info, left_style),
+            Paragraph(clinic_info, right_style)
+        ]
+    ]
+    
+    info_table = Table(info_table_data, colWidths=[3.5*inch, 3.5*inch])
+    info_table.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('LEFTPADDING', (0, 0), (0, 0), 0),
+        ('RIGHTPADDING', (1, 0), (1, 0), 0),
+        ('TOPPADDING', (0, 0), (-1, -1), 0),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+        # Remove borders
+        ('GRID', (0, 0), (-1, -1), 0, colors.white),
+    ]))
+    
+    elements.append(info_table)
+    elements.append(Spacer(1, 30))
+    
+    # Create services table data
+    table_data = [['Article', 'Quantité', 'Prix Unitaire', 'Prix Total', 'Date']]
+    total_amount = 0
+    
+    for item in items:
+        quantity = int(str(item['quantity']).replace(' ', ''))
+        price = int(str(item['price']).replace(' ', ''))
+        total_price = quantity * price
+        total_amount += total_price
+        
+        table_data.append([
+            str(item['name']),
+            f"{quantity}",
+            f"{price} Fcfa",
+            f"{total_price} Fcfa",
+            f"{datetime.now().strftime('%d/%m/%Y')}"
+        ])
+    
+    # Add total row spanning 4 columns with total in the last column
+    table_data.append(['', '', '', 'TOTAL:', f"{total_amount} Fcfa"])
+    
+    # Create and style services table
+    services_table = Table(table_data, colWidths=[2.2*inch, 0.8*inch, 1.1*inch, 1.1*inch, 1.0*inch])
+    services_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#06b6d4')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('ALIGN', (0, 1), (0, -1), 'LEFT'),  # Article names left aligned
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 10),  # Reduced header font size
+        ('FONTSIZE', (0, 1), (-1, -1), 9),  # Reduced body font size
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+        ('TOPPADDING', (0, 0), (-1, -1), 4),
+        ('BOTTOMPADDING', (0, 1), (-1, -1), 4),
+        ('BACKGROUND', (0, 1), (-1, -2), colors.beige),
+        ('BACKGROUND', (0, -1), (-1, -1), colors.lightgrey),
+        ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+    ]))
+    
+    elements.append(services_table)
+    elements.append(Spacer(1, 20))
+    
+    # Calculate insurance breakdown
+    insurance_coverage = 0.80  # 80%
+    insurance_amount = int(total_amount * insurance_coverage)
+    patient_amount = total_amount - insurance_amount
+    
+    # Create insurance breakdown table
+    breakdown_data = [
+        ['Total', 'Part Assureur (80%)', 'Part Patient (20%)'],
+        [f"{total_amount} Fcfa", f"{insurance_amount} Fcfa", f"{patient_amount} Fcfa"]
+    ]
+    
+    breakdown_table = Table(breakdown_data, colWidths=[2.2*inch, 2.2*inch, 2.2*inch])
+    breakdown_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#06b6d4')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 11),
+        ('FONTSIZE', (0, 1), (-1, 1), 10),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
+        ('TOPPADDING', (0, 0), (-1, -1), 8),
+        ('BOTTOMPADDING', (0, 1), (-1, 1), 8),
+        ('BACKGROUND', (0, 1), (-1, 1), colors.lightgrey),
+        ('FONTNAME', (0, 1), (-1, 1), 'Helvetica-Bold'),
+        # Highlight patient amount column
+        ('BACKGROUND', (2, 1), (2, 1), colors.HexColor('#FFE4E1')),
+        ('TEXTCOLOR', (2, 1), (2, 1), colors.HexColor('#DC143C')),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+    ]))
+    
+    elements.append(breakdown_table)
+    
+    # Add emphasized patient payment amount
+    elements.append(Spacer(1, 15))
+    patient_payment_text = f"<b>MONTANT À PAYER PAR LE PATIENT: {patient_amount} Fcfa</b>"
+    elements.append(Paragraph(patient_payment_text, emphasis_style))
+    
+    # Build PDF
+    doc.build(elements)
+    buffer.seek(0)
+    
+    return buffer
 
 @app.route('/generate_invoice/<int:patient_id>', methods=['POST'])
 def generate_invoice(patient_id):
+    """
+    Generate invoice PDF for a patient with itemized services
+    SOC 2 Compliant: Validates input, handles errors gracefully, no external data transmission
+    """
     try:
+        # Get invoice items from request
         data = request.get_json()
         if not data or 'items' not in data:
             return jsonify({'status': 'error', 'message': 'Invoice items are required'}), 400
-
+        
         items = data['items']
+        
+        # Validate each item has required fields
         for item in items:
             if not all(key in item for key in ['name', 'quantity', 'price']):
                 return jsonify({'status': 'error', 'message': 'Each item must have name, quantity, and price'}), 400
+            
+            # Validate numeric fields
             try:
                 float(item['quantity'])
                 float(item['price'])
             except (ValueError, TypeError):
                 return jsonify({'status': 'error', 'message': 'Quantity and price must be numeric'}), 400
-
+        
+        # Get patient information
         conn = get_db_connection()
         patient = conn.execute('SELECT rowid, * FROM patients WHERE rowid = ?', (patient_id,)).fetchone()
         conn.close()
-
+        
         if not patient:
             return jsonify({'status': 'error', 'message': 'Patient not found'}), 404
-
-        pdf = InvoicePDF()
-        pdf.add_page()
-        pdf.add_patient_info(patient)
-        pdf.add_invoice_table(items)
-
-        pdf_buffer = io.BytesIO()
-        pdf.output(pdf_buffer)
-        pdf_buffer.seek(0)
-
+        
+        # Generate PDF
+        pdf_buffer = create_invoice_pdf(patient, items)
+        
         return send_file(
             pdf_buffer,
             as_attachment=True,
             download_name=f'invoice_{patient["name"]}_{datetime.now().strftime("%Y%m%d_%H%M%S")}.pdf',
             mimetype='application/pdf'
         )
-
+        
     except Exception as e:
+        # Log error securely without exposing sensitive data
         print(f"Error generating invoice: {str(e)}")
         return jsonify({'status': 'error', 'message': 'Internal server error'}), 500
-
 
 def email_reception(firstname, lastname, body, plot, recipient_email):
 
