@@ -58,18 +58,19 @@ class InvoicePDF(FPDF):
         self.set_font('Arial', '', 11)
         self.set_text_color(0)
 
-        self.cell(100, 10, f"Nom: {patient['name']}", ln=0)
-        self.cell(90, 10, "Cabinet dentaire la renaissance", ln=1)
+        line_height = 6  # smaller height for tighter layout
 
-        self.cell(100, 10, f"Adresse: {patient['adresse'] or 'N/A'}", ln=0)
-        self.cell(90, 10, "Kantara Sacko, Rue 22, Medina Dakar", ln=1)
+        self.cell(100, line_height, f"Nom: {patient['name']}", ln=0)
+        self.cell(90, line_height, "Cabinet dentaire la renaissance", ln=1)
 
-        self.cell(100, 10, f"Date de naissance: {patient['date_of_birth'] or 'N/A'}", ln=0)
-        self.cell(90, 10, "cablarenaissance@gmail.com", ln=1)
+        self.cell(100, line_height, f"Adresse: {patient['adresse'] or 'N/A'}", ln=0)
+        self.cell(90, line_height, "Kantara Sacko, Rue 22, Medina Dakar", ln=1)
 
-        self.cell(100, 10, f"Date de facture: {datetime.now().strftime('%d/%m/%Y %H:%M')}", ln=0)
-        self.cell(90, 10, "(+221) 78 635 95 65", ln=1)
-        self.ln(5)
+        self.cell(100, line_height, f"Date de naissance: {patient['date_of_birth'] or 'N/A'}", ln=0)
+        self.cell(90, line_height, "cablarenaissance@gmail.com", ln=1)
+
+        self.cell(100, line_height, f"Date de facture: {datetime.now().strftime('%d/%m/%Y %H:%M')}", ln=0)
+        self.cell(90, line_height, "(+221) 78 635 95 65", ln=1)
 
     def add_invoice_table(self, items):
         self.set_font('Arial', 'B', 11)

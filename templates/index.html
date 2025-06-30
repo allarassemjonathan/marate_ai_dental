@@ -593,30 +593,36 @@ function closeInvoiceModal() {
 function addInvoiceItem() {
     const itemsContainer = document.getElementById('invoice-items-container');
     const itemDiv = document.createElement('div');
-    itemDiv.className = 'grid grid-cols-1 md:grid-cols-4 gap-5 mb-6 p-6 border border-gray-700 rounded-xl';
+
+    itemDiv.className = 'grid grid-cols-1 md:grid-cols-5 gap-5 mb-6 p-6 border border-gray-700 rounded-xl';
     
     itemDiv.innerHTML = `
-        <div class="relative md:col-span-2">
-            <input type="text" placeholder="Nom de l'article" class="item-name input-field w-full p-4 rounded-xl" required>
-            <div class="absolute left-0 bottom-0 h-0.5 w-0 bg-gradient-to-r from-cyan-400 to-cyan-400 transition-all duration-300 input-underline"></div>
-        </div>
-        
-        <div class="relative">
-            <input type="number" placeholder="Quantité" class="item-quantity input-field w-full p-4 rounded-xl" step="1" min="0" required>
-            <div class="absolute left-0 bottom-0 h-0.5 w-0 bg-gradient-to-r from-cyan-400 to-cyan-400 transition-all duration-300 input-underline"></div>
-        </div>
-        
-        <div class="relative">
-            <input type="number" placeholder="Prix unitaire" class="item-price input-field w-full p-4 rounded-xl" step="500" min="0" required>
-            <div class="absolute left-0 bottom-0 h-0.5 w-0 bg-gradient-to-r from-cyan-400 to-cyan-400 transition-all duration-300 input-underline"></div>
-        </div>
-        
-        <div class="md:col-span-4 flex justify-end">
-            <button type="button" onclick="removeInvoiceItem(this)" class="text-red-400 hover:text-red-300 transition-colors text-sm">
-                Supprimer cet article
-            </button>
-        </div>
-    `;
+    <div class="relative md:col-span-2">
+        <input type="text" placeholder="Nom de l'article" class="item-name input-field w-full p-4 rounded-xl" required>
+        <div class="absolute left-0 bottom-0 h-0.5 w-0 bg-gradient-to-r from-cyan-400 to-cyan-400 transition-all duration-300 input-underline"></div>
+    </div>
+    
+    <div class="relative">
+        <input type="number" placeholder="Quantité" class="item-quantity input-field w-full p-4 rounded-xl" step="1" min="0" required>
+        <div class="absolute left-0 bottom-0 h-0.5 w-0 bg-gradient-to-r from-cyan-400 to-cyan-400 transition-all duration-300 input-underline"></div>
+    </div>
+    
+    <div class="relative">
+        <input type="number" placeholder="Prix unitaire" class="item-price input-field w-full p-4 rounded-xl" step="500" min="0" required>
+        <div class="absolute left-0 bottom-0 h-0.5 w-0 bg-gradient-to-r from-cyan-400 to-cyan-400 transition-all duration-300 input-underline"></div>
+    </div>
+    
+    <div class="relative">
+        <input type="number" placeholder="% Assurance" class="item-insurance input-field w-full p-4 rounded-xl" step="1" min="0" max="100" value="80" required>
+        <div class="absolute left-0 bottom-0 h-0.5 w-0 bg-gradient-to-r from-cyan-400 to-cyan-400 transition-all duration-300 input-underline"></div>
+    </div>
+    
+    <div class="md:col-span-5 flex justify-end">
+        <button type="button" onclick="removeInvoiceItem(this)" class="text-red-400 hover:text-red-300 transition-colors text-sm">
+            Supprimer cet article
+        </button>
+    </div>
+`;
     
     itemsContainer.appendChild(itemDiv);
     
