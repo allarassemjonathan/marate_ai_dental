@@ -22,7 +22,7 @@ your_email = "jonathanjerabe@gmail.com"
 your_password = "ajrn mros lkzm urnu"
 
 acteur_inf = "jonathanjerabe@gmail.com"
-acteur_med = "cablarenaissance@gmail.com"
+acteur_med = "jonathanjerabe@gmail.com"
 
 # Function to get DB connection
 def get_db_connection():
