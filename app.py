@@ -1,7 +1,6 @@
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for, flash
 import sqlite3
 from fpdf import FPDF
-import base64
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
