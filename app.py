@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for, flash
 import sqlite3
 from fpdf import FPDF
 import base64
@@ -8,11 +8,72 @@ from email.mime.text import MIMEText
 from email.mime.image import MIMEImage
 from flask import send_file
 import io
-from datetime import datetime
+from datetime import datetime, timedelta
 import requests
+import hashlib
+import secrets
+import stripe
+import os
+from functools import wraps
+from dotenv import load_dotenv
+
+load_dotenv()
+
+PRICE = os.environ.get('PRICE')
+STRIPE_SECRET_KEY = os.environ.get('STRIPE_SECRET_KEY')
+ENDPOINT_SECRET = os.environ.get('ENDPOINT_SECRET')
 
 app = Flask(__name__)
+app.secret_key = 'your-secret-key-change-this'  # Change this to a secure secret key
+stripe.api_key = STRIPE_SECRET_KEY
+items=[{'price': PRICE}]
+endpoint_secret = ENDPOINT_SECRET
+
 DATABASE = 'patients.db'
+
+def hash_password(password):
+    """Hash a password for storing."""
+    salt = secrets.token_hex(16)
+    pwdhash = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt.encode('utf-8'), 100000)
+    return salt + pwdhash.hex()
+
+def verify_password(stored_password, provided_password):
+    """Verify a stored password against provided password."""
+    salt = stored_password[:32]
+    stored_hash = stored_password[32:]
+    pwdhash = hashlib.pbkdf2_hmac('sha256', provided_password.encode('utf-8'), salt.encode('utf-8'), 100000)
+    return pwdhash.hex() == stored_hash
+
+def login_required(f):
+    """Decorator to require login for routes."""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+def subscription_required(f):
+    """Decorator to require active subscription."""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            return redirect(url_for('login'))
+        
+        # Check if user has valid subscription (active, incomplete, or trialing)
+        conn = get_db_connection()
+        subscription = conn.execute('''
+            SELECT * FROM subscriptions 
+            WHERE user_id = ? AND status IN ('active', 'incomplete', 'trialing')
+            AND current_period_end >= date('now')
+        ''', (session['user_id'],)).fetchone()
+        conn.close()
+        
+        if not subscription:
+            return redirect(url_for('payment'))
+        
+        return f(*args, **kwargs)
+    return decorated_function
 
 # Set up the SMTP server
 smtp_server = "smtp.gmail.com"
@@ -22,7 +83,191 @@ your_email = "jonathanjerabe@gmail.com"
 your_password = "ajrn mros lkzm urnu"
 
 acteur_inf = "jonathanjerabe@gmail.com"
-acteur_med = "jonathanjerabe@gmail.com"
+acteur_med = "cablarenaissance@gmail.com"
+
+import random
+import string
+
+# Add this to store verification codes temporarily (in production, use Redis or database)
+verification_codes = {}
+
+def generate_verification_code():
+    """Generate a 6-digit verification code."""
+    return ''.join(random.choices(string.digits, k=6))
+
+def send_verification_email(email, code):
+    """Send verification code via email."""
+    subject = "Verify Your Email - Cabinet la Renaissance"
+    
+    msg = MIMEMultipart()
+    msg['From'] = your_email
+    msg['To'] = email
+    msg['Subject'] = subject
+
+    html = f"""
+    <html>
+    <body>
+        <h2>Email Verification</h2>
+        <p>Your verification code is: <strong>{code}</strong></p>
+        <p>This code will expire in 10 minutes.</p>
+        <br>
+        <img style="width: 350px; height: 100px;" src="https://allarassemjonathan.github.io/marate_white.png">
+    </body>
+    </html>
+    """
+    msg.attach(MIMEText(html, 'html'))
+
+    try:
+        server = smtplib.SMTP(smtp_server, smtp_port)
+        server.starttls()
+        server.login(your_email, your_password)
+        server.send_message(msg)
+        server.quit()
+        return True
+    except Exception as e:
+        print(f"Error sending verification email: {e}")
+        return False
+
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if 'user_id' in session:
+        return redirect(url_for('landing'))
+    
+    if request.method == 'GET':
+        return render_template('login.html')
+    
+    data = request.get_json() if request.is_json else request.form
+    email = data.get('email', '').strip().lower()
+    password = data.get('password', '')
+    
+    if not email or not password:
+        return jsonify({'status': 'error', 'message': 'Email and password are required'}), 400
+    
+    try:
+        conn = get_db_connection()
+        user = conn.execute('SELECT id, email, password_hash FROM users WHERE email = ? AND is_active = 1', 
+                           (email,)).fetchone()
+        conn.close()
+        
+        if not user or not verify_password(user['password_hash'], password):
+            return jsonify({'status': 'error', 'message': 'Invalid email or password'}), 401
+        
+        session['user_id'] = user['id']
+        session['email'] = user['email']
+        
+        return jsonify({'status': 'success', 'redirect': url_for('landing')})
+        
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': 'Login failed'}), 500
+    
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if request.method == 'GET':
+        return render_template('register.html')
+    
+    data = request.get_json() if request.is_json else request.form
+    email = data.get('email', '').strip().lower()
+    password = data.get('password', '')
+    name = data.get('name', '').strip()
+    
+    if not email or not password or not name:
+        return jsonify({'status': 'error', 'message': 'Name, email and password are required'}), 400
+    
+    if len(password) < 6:
+        return jsonify({'status': 'error', 'message': 'Password must be at least 6 characters'}), 400
+    
+    try:
+        conn = get_db_connection()
+        existing_user = conn.execute('SELECT id FROM users WHERE email = ?', (email,)).fetchone()
+        if existing_user:
+            conn.close()
+            return jsonify({'status': 'error', 'message': 'Email already registered'}), 400
+        
+        conn.close()
+        
+        # Generate and send verification code
+        code = generate_verification_code()
+        if not send_verification_email(email, code):
+            return jsonify({'status': 'error', 'message': 'Failed to send verification email'}), 500
+        
+        verification_codes[email] = {
+            'code': code,
+            'password': password,
+            'name': name,
+            'timestamp': datetime.now()
+        }
+        
+        return jsonify({'status': 'success', 'message': 'Verification code sent to your email', 'email': email})
+        
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': 'Registration failed'}), 500
+    
+@app.route('/verify-email', methods=['POST'])
+def verify_email():
+    data = request.get_json() if request.is_json else request.form
+    email = data.get('email', '').strip().lower()
+    code = data.get('code', '').strip()
+    
+    if not email or not code:
+        return jsonify({'status': 'error', 'message': 'Email and code are required'}), 400
+    
+    # Check if verification data exists
+    if email not in verification_codes:
+        return jsonify({'status': 'error', 'message': 'No verification request found'}), 400
+    
+    verification_data = verification_codes[email]
+    
+    # Check if code has expired (10 minutes)
+    if datetime.now() - verification_data['timestamp'] > timedelta(minutes=10):
+        del verification_codes[email]
+        return jsonify({'status': 'error', 'message': 'Verification code has expired'}), 400
+    
+    # Check if code matches
+    if verification_data['code'] != code:
+        return jsonify({'status': 'error', 'message': 'Invalid verification code'}), 400
+    
+    try:
+        # Create the user account with name
+        conn = get_db_connection()
+        password_hash = hash_password(verification_data['password'])
+        cursor = conn.execute('INSERT INTO users (email, password_hash) VALUES (?, ?)', 
+                             (email, password_hash))
+        user_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        
+        # Clean up verification data
+        del verification_codes[email]
+        
+        # Set session
+        session['user_id'] = user_id
+        session['email'] = email
+        session['name'] = verification_data['name']
+        
+        return jsonify({'status': 'success', 'redirect': url_for('payment')})
+        
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': 'Account creation failed'}), 500
+
+@app.route('/resend-code', methods=['POST'])
+def resend_code():
+    data = request.get_json() if request.is_json else request.form
+    email = data.get('email', '').strip().lower()
+    
+    if not email or email not in verification_codes:
+        return jsonify({'status': 'error', 'message': 'No verification request found'}), 400
+    
+    # Generate new code
+    code = generate_verification_code()
+    if not send_verification_email(email, code):
+        return jsonify({'status': 'error', 'message': 'Failed to send verification email'}), 500
+    
+    # Update verification data
+    verification_codes[email]['code'] = code
+    verification_codes[email]['timestamp'] = datetime.now()
+    
+    return jsonify({'status': 'success', 'message': 'New verification code sent'})
 
 # Function to get DB connection
 def get_db_connection():
@@ -164,6 +409,7 @@ class InvoicePDF(FPDF):
 
 
 @app.route('/generate_invoice/<int:patient_id>', methods=['POST'])
+@subscription_required
 def generate_invoice(patient_id):
     try:
         data = request.get_json()
@@ -270,11 +516,10 @@ def get_db_connection():
     conn = sqlite3.connect(DATABASE)
     conn.row_factory = sqlite3.Row
     return conn
-
 def init_db():
     conn = get_db_connection()
     
-    # Create table with new dental-focused schema
+    # Create patients table (existing)
     conn.execute('''CREATE TABLE IF NOT EXISTS patients (
         name TEXT NOT NULL, 
         date_of_birth DATE, 
@@ -288,25 +533,52 @@ def init_db():
         created_at DATE
     )''')
     
-    # Keep visits table unchanged
+    # Create visits table (existing)
     conn.execute('''CREATE TABLE IF NOT EXISTS visits (
-        id INTEGER PRIMARY KEY AUTOINCREMENT, patient_id INTEGER,
-        visit_date DATE, notes TEXT,
+        id INTEGER PRIMARY KEY AUTOINCREMENT, 
+        patient_id INTEGER,
+        visit_date DATE, 
+        notes TEXT,
         FOREIGN KEY(patient_id) REFERENCES patients(rowid)
+    )''')
+    
+    # Create users table for authentication (updated with name field)
+    conn.execute('''CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        email TEXT UNIQUE NOT NULL,
+        password_hash TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        is_active BOOLEAN DEFAULT 1
+    )''')
+    
+    # Create subscriptions table for payment tracking
+    conn.execute('''CREATE TABLE IF NOT EXISTS subscriptions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        stripe_customer_id TEXT,
+        stripe_subscription_id TEXT,
+        status TEXT NOT NULL,
+        current_period_start DATE,
+        current_period_end DATE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(user_id) REFERENCES users(id)
     )''')
     
     conn.commit()
     conn.close()
     
-    # Run migration if needed (this will handle existing databases)
+    # Run migration if needed
     migrate_database()
 
 @app.route('/')
+@subscription_required
 def index():
+    """Main application page - only accessible with valid subscription."""
     init_db()
     return render_template('index.html')
 
 @app.route('/search')
+@subscription_required
 def search():
     q = request.args.get('q', '')
     conn = get_db_connection()
@@ -319,6 +591,7 @@ def search():
 from datetime import date
 
 @app.route('/add', methods=['POST'])
+@subscription_required
 def add():
     data = request.get_json() or {}
     if not data.get('name'):
@@ -350,6 +623,7 @@ def add():
         return jsonify({'status': 'error', 'message': str(e)}), 500
     
 @app.route('/delete/<int:rowid>', methods=['DELETE'])
+@subscription_required
 def delete(rowid):
     conn = get_db_connection()
     conn.execute('DELETE FROM patients WHERE rowid = ?', (rowid,))
@@ -358,6 +632,7 @@ def delete(rowid):
     return jsonify({'status': 'deleted'})
 
 @app.route('/patient/<int:patient_id>')
+@subscription_required
 def patient_detail(patient_id):
     conn = get_db_connection()
     patient = conn.execute('SELECT rowid, * FROM patients WHERE rowid = ?', (patient_id,)).fetchone()
@@ -366,6 +641,7 @@ def patient_detail(patient_id):
     return render_template('patient.html', patient=patient, visits=visits) if patient else ("Patient not found", 404)
 
 @app.route('/get_patient/<int:patient_id>')
+@subscription_required
 def get_patient(patient_id):
     conn = get_db_connection()
     patient = conn.execute('SELECT rowid, * FROM patients WHERE rowid = ?', (patient_id,)).fetchone()
@@ -375,6 +651,7 @@ def get_patient(patient_id):
     return jsonify({'status': 'error', 'message': 'Patient not found'}), 404
 
 @app.route('/update/<int:patient_id>', methods=['PUT'])
+@subscription_required
 def update_patient(patient_id):
     data = request.get_json() or {}
     if not data.get('name'):
@@ -478,6 +755,177 @@ def migrate_database():
     finally:
         conn.commit()
         conn.close()
+
+@app.route('/payment', methods=['GET', 'POST'])
+def payment():
+    if request.method == 'GET':
+        # Check if user already has valid subscription
+        conn = get_db_connection()
+        subscription = conn.execute('''
+            SELECT * FROM subscriptions 
+            WHERE user_id = ? AND status IN ('active', 'incomplete', 'trialing')
+            AND current_period_end >= date('now')
+        ''', (session['user_id'],)).fetchone()
+        conn.close()
+        
+        if subscription:
+            return redirect(url_for('index'))
+        
+        return render_template('payment.html')
+    
+    # Handle payment processing
+    try:
+        data = request.get_json() if request.is_json else request.form
+        payment_method_id = data.get('payment_method_id')
+        
+        if not payment_method_id:
+            return jsonify({'status': 'error', 'message': 'Payment method required'}), 400
+        
+        conn = get_db_connection()
+        user = conn.execute('SELECT * FROM users WHERE id = ?', (session['user_id'],)).fetchone()
+        
+        # Create or retrieve Stripe customer
+        existing_subscription = conn.execute(
+            'SELECT stripe_customer_id FROM subscriptions WHERE user_id = ?', 
+            (session['user_id'],)
+        ).fetchone()
+        
+        if existing_subscription and existing_subscription['stripe_customer_id']:
+            customer_id = existing_subscription['stripe_customer_id']
+            customer = stripe.Customer.retrieve(customer_id)
+            # Update payment method
+            stripe.PaymentMethod.attach(payment_method_id, customer=customer_id)
+            stripe.Customer.modify(customer_id, invoice_settings={'default_payment_method': payment_method_id})
+        else:
+            # Create new Stripe customer
+            customer = stripe.Customer.create(
+                email=user['email'],
+                payment_method=payment_method_id,
+                invoice_settings={'default_payment_method': payment_method_id}
+            )
+            customer_id = customer.id
+        
+        # Create subscription with immediate payment
+        subscription = stripe.Subscription.create(
+            customer=customer_id,
+            items=[{'price': PRICE }],
+            default_payment_method=payment_method_id,
+            expand=['latest_invoice.payment_intent']
+        )
+        
+        # Save subscription to database with the actual status from Stripe
+        conn.execute('''
+            INSERT OR REPLACE INTO subscriptions 
+            (user_id, stripe_customer_id, stripe_subscription_id, status, current_period_start, current_period_end)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (
+            session['user_id'],
+            customer_id,
+            subscription.id,
+            subscription.status,  # This will be 'active', 'incomplete', or 'trialing'
+            datetime.fromtimestamp(subscription.current_period_start).date(),
+            datetime.fromtimestamp(subscription.current_period_end).date()
+        ))
+        conn.commit()
+        conn.close()
+        
+        # Return success with redirect
+        return jsonify({
+            'status': 'success',
+            'subscription_status': subscription.status,
+            'redirect': url_for('index')
+        })
+        
+    except stripe.error.StripeError as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 400
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': 'Payment processing failed'}), 500
+    
+@app.route('/webhook', methods=['POST'])
+def stripe_webhook():
+    """Handle Stripe webhooks for subscription updates."""
+    payload = request.get_data(as_text=True)
+    sig_header = request.headers.get('Stripe-Signature')
+    endpoint_secret = 'whsec_your_webhook_secret'  # Your webhook secret from Stripe
+    
+    try:
+        event = stripe.Webhook.construct_event(payload, sig_header, endpoint_secret)
+    except ValueError:
+        return 'Invalid payload', 400
+    except stripe.error.SignatureVerificationError:
+        return 'Invalid signature', 400
+    
+    # Handle subscription events
+    if event['type'] == 'invoice.payment_succeeded':
+        subscription = event['data']['object']['subscription']
+        update_subscription_status(subscription, 'active')
+    elif event['type'] == 'invoice.payment_failed':
+        subscription = event['data']['object']['subscription']
+        update_subscription_status(subscription, 'past_due')
+    elif event['type'] == 'customer.subscription.deleted':
+        subscription_id = event['data']['object']['id']
+        update_subscription_status(subscription_id, 'cancelled')
+    
+    return 'Success', 200
+
+def update_subscription_status(subscription_id, status):
+    """Update subscription status in database."""
+    try:
+        # Get subscription details from Stripe
+        if status != 'cancelled':
+            stripe_sub = stripe.Subscription.retrieve(subscription_id)
+            conn = get_db_connection()
+            conn.execute('''
+                UPDATE subscriptions 
+                SET status = ?, current_period_start = ?, current_period_end = ?
+                WHERE stripe_subscription_id = ?
+            ''', (
+                status,
+                datetime.fromtimestamp(stripe_sub.current_period_start).date(),
+                datetime.fromtimestamp(stripe_sub.current_period_end).date(),
+                subscription_id
+            ))
+        else:
+            conn = get_db_connection()
+            conn.execute('UPDATE subscriptions SET status = ? WHERE stripe_subscription_id = ?', 
+                        (status, subscription_id))
+        
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"Error updating subscription status: {e}")
+
+@app.route('/landing')
+@login_required
+def landing():
+    """Landing page that checks subscription status and redirects accordingly."""
+    # Check if user has active subscription
+    conn = get_db_connection()
+    subscription = conn.execute('''
+        SELECT * FROM subscriptions 
+        WHERE user_id = ? AND status IN ('active', 'incomplete', 'trialing')
+        AND current_period_end >= date('now')
+    ''', (session['user_id'],)).fetchone()
+    conn.close()
+    
+    if subscription:
+        return redirect(url_for('index'))  # Go to main app
+    else:
+        return redirect(url_for('payment'))  # Go to payment
+
+@app.route('/start')
+def start():
+    """Main entry point - redirects based on authentication status."""
+    if 'user_id' in session:
+        return redirect(url_for('landing'))  # Go to landing which handles subscription check
+    else:
+        return redirect(url_for('login'))  # Go to login
+
+@app.route('/logout')
+def logout():
+    """Clear session and redirect to start."""
+    session.clear()
+    return redirect(url_for('start'))
 
 if __name__ == '__main__':
     init_db()

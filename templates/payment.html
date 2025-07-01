@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Payment - Cabinet la Renaissance</title>
+    <script src="https://js.stripe.com/v3/"></script>
+</head>
+<body>
+    <h1>Subscribe to Cabinet la Renaissance</h1>
+    <p>Monthly subscription: $29.99/month</p>
+    
+    <form id="payment-form">
+        <div id="card-element">
+            <!-- Stripe Elements will create form elements here -->
+        </div>
+        <button id="submit-button">Subscribe Now</button>
+    </form>
+    
+    <div id="card-errors" role="alert"></div>
+    <div id="message"></div>
+
+    <script>
+// Initialize Stripe
+const stripe = Stripe('pk_live_51Pq9jtFr9wM1tN4f0iLgMN9In2KgrsPYuixqQjiYrm2BajKrUEKMSXY1gYejM3x4rReV9F8WSwcRLa6oohsUH3a500Tb2lg2bP');
+const elements = stripe.elements();
+
+// Create card element
+const cardElement = elements.create('card');
+cardElement.mount('#card-element');
+
+// Handle real-time validation errors from the card Element
+cardElement.on('change', function(event) {
+    const displayError = document.getElementById('card-errors');
+    if (event.error) {
+        displayError.textContent = event.error.message;
+    } else {
+        displayError.textContent = '';
+    }
+});
+
+// Handle form submission
+const form = document.getElementById('payment-form');
+const submitButton = document.getElementById('submit-button');
+
+form.addEventListener('submit', async function(event) {
+    event.preventDefault();
+    
+    submitButton.disabled = true;
+    submitButton.textContent = 'Processing...';
+
+    // Create payment method
+    const {error, paymentMethod} = await stripe.createPaymentMethod({
+        type: 'card',
+        card: cardElement,
+    });
+
+    if (error) {
+        // Show error to customer
+        document.getElementById('card-errors').textContent = error.message;
+        submitButton.disabled = false;
+        submitButton.textContent = 'Subscribe Now';
+    } else {
+        // Send payment method to server
+        try {
+            const response = await fetch('/payment', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    payment_method_id: paymentMethod.id
+                })
+            });
+
+            const result = await response.json();
+
+            if (result.status === 'success') {
+                // Payment successful - show success message
+                document.getElementById('message').innerHTML = '<p style="color: green;">Payment successful! Redirecting...</p>';
+                
+                // Small delay to ensure database is updated, then redirect
+                setTimeout(() => {
+                    window.location.href = result.redirect;
+                }, 1000);
+                
+            } else {
+                // Handle error
+                document.getElementById('message').innerHTML = '<p style="color: red;">' + result.message + '</p>';
+                submitButton.disabled = false;
+                submitButton.textContent = 'Subscribe Now';
+            }
+        } catch (error) {
+            console.error('Payment error:', error);
+            document.getElementById('message').innerHTML = '<p style="color: red;">Payment processing failed. Please try again.</p>';
+            submitButton.disabled = false;
+            submitButton.textContent = 'Subscribe Now';
+        }
+    }
+});
+    </script>
+</body>
+</html>
