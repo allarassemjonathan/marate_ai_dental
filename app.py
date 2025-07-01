@@ -338,7 +338,7 @@ class InvoicePDF(FPDF):
         self.cell(90, line_height, "(+221) 78 635 95 65", ln=1)
 
         self.set_xy(right_x, self.get_y())
-        self.cell(90, line_height, "N° Order Medical: B 1506", ln=1)
+        self.cell(90, line_height, "Ordre des Chirurgiens Dentistes: B 1506", ln=1)
         self.ln(5)
 
     def add_invoice_table(self, items):
