@@ -15,12 +15,15 @@ import stripe
 import os
 from functools import wraps
 from dotenv import load_dotenv
+import psycopg2
+from psycopg2.extras import RealDictCursor
 
 load_dotenv()
 
 PRICE = os.environ.get('PRICE')
 STRIPE_SECRET_KEY = os.environ.get('STRIPE_SECRET_KEY')
 ENDPOINT_SECRET = os.environ.get('ENDPOINT_SECRET')
+DB_URL = os.environ.get('DB_URL')
 
 USERNAMES = {'docteur-sacko', 'secretaire1'}
 
@@ -136,7 +139,7 @@ def send_verification_email(email, code):
         return False
 
 
-@app.route('/login', methods=['GET', 'POST'])
+@app.route('/login', methods=['POST'])
 def login():
     # if 'user_id' in session:
     #     return redirect(url_for('landing'))
@@ -423,7 +426,7 @@ def generate_invoice(patient_id):
                 return jsonify({'status': 'error', 'message': 'Quantity and price must be numeric'}), 400
 
         conn = get_db_connection()
-        patient = conn.execute('SELECT rowid, * FROM patients WHERE rowid = ?', (patient_id,)).fetchone()
+        patient = conn.execute('SELECT id, * FROM patients WHERE id = ?', (patient_id,)).fetchone()
         conn.close()
 
         if not patient:
@@ -509,62 +512,68 @@ def email_reception(firstname, lastname, body, plot, recipient_email):
 
 
 def get_db_connection():
-    conn = sqlite3.connect(DATABASE)
-    conn.row_factory = sqlite3.Row
-    return conn
+    return psycopg2.connect(DB_URL, cursor_factory=RealDictCursor)
 def init_db():
     conn = get_db_connection()
-    
-    # Create patients table (existing)
-    conn.execute('''CREATE TABLE IF NOT EXISTS patients (
-        name TEXT NOT NULL, 
-        date_of_birth DATE, 
-        adresse TEXT, 
-        age INTEGER,
-        antecedents_tabagiques TEXT,
-        statut_implants TEXT,
-        frequence_fil_dentaire TEXT,
-        frequence_brossage TEXT,
-        allergies TEXT,
-        created_at DATE
-    )''')
-    
-    # Create visits table (existing)
-    conn.execute('''CREATE TABLE IF NOT EXISTS visits (
-        id INTEGER PRIMARY KEY AUTOINCREMENT, 
-        patient_id INTEGER,
-        visit_date DATE, 
-        notes TEXT,
-        FOREIGN KEY(patient_id) REFERENCES patients(rowid)
-    )''')
-    
-    # Create users table for authentication (updated with name field)
-    conn.execute('''CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        email TEXT UNIQUE NOT NULL,
-        password_hash TEXT NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        is_active BOOLEAN DEFAULT 1
-    )''')
-    
-    # Create subscriptions table for payment tracking
-    conn.execute('''CREATE TABLE IF NOT EXISTS subscriptions (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL,
-        stripe_customer_id TEXT,
-        stripe_subscription_id TEXT,
-        status TEXT NOT NULL,
-        current_period_start DATE,
-        current_period_end DATE,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY(user_id) REFERENCES users(id)
-    )''')
-    
+    cur = conn.cursor()
+
+    # Create patients table
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS patients (
+            id SERIAL PRIMARY KEY,
+            name TEXT NOT NULL,
+            date_of_birth DATE,
+            adresse TEXT,
+            age INTEGER,
+            antecedents_tabagiques TEXT,
+            statut_implants TEXT,
+            frequence_fil_dentaire TEXT,
+            frequence_brossage TEXT,
+            allergies TEXT,
+            created_at DATE
+        )
+    ''')
+
+    # Create visits table
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS visits (
+            id SERIAL PRIMARY KEY,
+            patient_id INTEGER REFERENCES patients(id),
+            visit_date DATE,
+            notes TEXT
+        )
+    ''')
+
+    # Create users table
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+            id SERIAL PRIMARY KEY,
+            email TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            is_active BOOLEAN DEFAULT TRUE
+        )
+    ''')
+
+    # Create subscriptions table
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS subscriptions (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(id),
+            stripe_customer_id TEXT,
+            stripe_subscription_id TEXT,
+            status TEXT NOT NULL,
+            current_period_start DATE,
+            current_period_end DATE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+
     conn.commit()
     conn.close()
     
     # Run migration if needed
-    migrate_database()
+    # migrate_database()
 
 @app.route('/')
 # @subscription_required
@@ -578,51 +587,160 @@ def index():
 def search():
     q = request.args.get('q', '')
     conn = get_db_connection()
-    results = conn.execute(
-        "SELECT rowid, * FROM patients WHERE name LIKE ? OR adresse LIKE ?",
-        tuple(f'%{q}%' for _ in range(2))
-    ).fetchall()
-    conn.close()
-    return jsonify([dict(row) for row in results])
-from datetime import date
+    cur = conn.cursor()
 
+    cur.execute(
+        """SELECT id, name, date_of_birth, adresse, age, antecedents_tabagiques,
+        statut_implants, frequence_fil_dentaire, frequence_brossage,
+        allergies, created_at
+        FROM patients
+        WHERE name ILIKE %s OR adresse ILIKE %s""",
+        tuple(f'%{q}%' for _ in range(2))
+    )
+    rows = cur.fetchall()
+
+    # Get column names for dict conversion
+    rows = [dict(row) for row in rows]
+    conn.close()
+    return jsonify(rows)
+
+
+from datetime import date
+from psycopg2 import sql  # Ensure this import is available
+from datetime import datetime, timezone, timedelta # chad timezone attempt
+from datetime import date
 @app.route('/add', methods=['POST'])
-# @subscription_required
 def add():
     data = request.get_json() or {}
+    print(data)
+    # List of known date fields in the table
+    date_fields = {'name', 'adresse', 'date_of_birth'} #'taille', 'tension_arterielle', 'temperature', 'hypothese_de_diagnostique', 'bilan', 'resultat_bilan', 'signature', 'renseignements_clinique', 'ordonnance', 'created_at'}
+
+    # Replace empty strings with None for date fields
+    cleaned_data = {}
+    for k, v in data.items():
+        if k in date_fields and v == '':
+            cleaned_data[k] = None
+        else:
+            cleaned_data[k] = v
+
+    data = cleaned_data
     if not data.get('name'):
+        print('issue is here 1 ')
         return jsonify({'status': 'error', 'message': 'Name is required'}), 400
 
     try:
-        data['created_at'] = date.today().isoformat()  # Add today's date
-        allowed_columns = {
-            'name', 'date_of_birth', 'adresse', 'age', 
-            'antecedents_tabagiques', 'statut_implants', 
-            'frequence_fil_dentaire', 'frequence_brossage', 'allergies', 'created_at'
-        }
-        filtered_data = {k: v for k, v in data.items() if k in allowed_columns}
+        gmt = timezone(timedelta(hours=0))
+        data['created_at'] = datetime.now(gmt)
 
-        columns = ', '.join(filtered_data.keys())
-        placeholders = ', '.join(['?'] * len(filtered_data))
-        values = list(filtered_data.values())
+        # Fields that should be treated as floats in the DB
+        float_fields = {'age'}
 
-        # send email to physician
-        email_reception(filtered_data['name'], '', 'Cher medecin, vous avez un nouveau patient! Faite-le entrer dès que vous êtes prêt', None, acteur_med)
-            
+        for field in float_fields:
+            print(field)
+            if field in data:
+                if data[field] == '':
+                    print(field, 'should be', None)
+                    data[field] = None
+                else:
+                    try:
+                        print(field)
+                        print(data[field])
+                        data[field] = float(data[field])
+                    except ValueError:
+                        print('issue is here 2 ')
+                        return jsonify({'status': 'error', 'message': f'{field} must be a number'}), 400
+
+        # Notify reception if temperature is missing
+        if data.get('name') is not None:
+            email_reception(
+                data['name'], '',
+                'Chers infirmiers, vous avez un nouveau patient! Faite-le entrer dès que vous êtes prêt',
+                None, acteur_inf
+            )
+
+        print(data)
+        print(data.items())
+
+        # Use parameterized query
+        columns = list(data.keys())
+        values = list(data.values())
+        placeholders = ', '.join(['%s'] * len(values))
+        print(placeholders, values)
+        col_names = ', '.join(columns)
+
+        query = f'INSERT INTO patients ({col_names}) VALUES ({placeholders})'
+
         conn = get_db_connection()
-        conn.execute(f'INSERT INTO patients ({columns}) VALUES ({placeholders})', values)
+        cur = conn.cursor()
+        print(query, values)
+        cur.execute(query, values)
         conn.commit()
         conn.close()
+        # log_file(
+        #     session.get('user_type'),
+        #     'Ajout d\'un patient',
+        #     f"Le patient '{data.get('name')}' a été ajouté"
+        # )
         return jsonify({'status': 'success'})
-    
+
     except Exception as e:
+        print(e)
         return jsonify({'status': 'error', 'message': str(e)}), 500
+
+# @app.route('/add', methods=['POST'])
+# # @subscription_required
+# def add():
+#     data = request.get_json() or {}
+#     if not data.get('name'):
+#         return jsonify({'status': 'error', 'message': 'Name is required'}), 400
+
+#     try:
+#         data['created_at'] = date.today().isoformat()  # Add today's date
+
+#         allowed_columns = {
+#             'name', 'date_of_birth', 'adresse', 'age', 
+#             'antecedents_tabagiques', 'statut_implants', 
+#             'frequence_fil_dentaire', 'frequence_brossage', 'allergies', 'created_at'
+#         }
+#         filtered_data = {k: v for k, v in data.items() if k in allowed_columns}
+
+#         # Dynamically build SQL INSERT query using psycopg2.sql for safety
+#         columns = list(filtered_data.keys())
+#         values = list(filtered_data.values())
+#         placeholders = [sql.Placeholder()] * len(columns)
+
+#         insert_stmt = sql.SQL("INSERT INTO patients ({fields}) VALUES ({placeholders})").format(
+#             fields=sql.SQL(', ').join(map(sql.Identifier, columns)),
+#             placeholders=sql.SQL(', ').join(placeholders)
+#         )
+
+#         # Send email notification (unchanged)
+#         email_reception(
+#             filtered_data['name'],
+#             '',
+#             'Cher medecin, vous avez un nouveau patient! Faite-le entrer dès que vous êtes prêt',
+#             None,
+#             acteur_med
+#         )
+
+#         conn = get_db_connection()
+#         cur = conn.cursor()
+#         cur.execute(insert_stmt, values)
+#         conn.commit()
+#         conn.close()
+
+#         return jsonify({'status': 'success'})
+
+#     except Exception as e:
+#         return jsonify({'status': 'error', 'message': str(e)}), 500
     
 @app.route('/delete/<int:rowid>', methods=['DELETE'])
 # @subscription_required
 def delete(rowid):
     conn = get_db_connection()
-    conn.execute('DELETE FROM patients WHERE rowid = ?', (rowid,))
+    cur = conn.cursor()
+    cur.execute('DELETE FROM patients WHERE id = ?', (rowid,))
     conn.commit()
     conn.close()    
     return jsonify({'status': 'deleted'})
@@ -631,8 +749,9 @@ def delete(rowid):
 # @subscription_required
 def patient_detail(patient_id):
     conn = get_db_connection()
-    patient = conn.execute('SELECT rowid, * FROM patients WHERE rowid = ?', (patient_id,)).fetchone()
-    visits = conn.execute('SELECT * FROM visits WHERE patient_id = ?', (patient_id,)).fetchall()
+    cur = conn.cursor()
+    patient = cur.execute('SELECT id, * FROM patients WHERE id = ?', (patient_id,)).fetchone()
+    visits = cur.execute('SELECT * FROM visits WHERE patient_id = ?', (patient_id,)).fetchall()
     conn.close()
     return render_template('patient.html', patient=patient, visits=visits) if patient else ("Patient not found", 404)
 
@@ -640,7 +759,8 @@ def patient_detail(patient_id):
 # @subscription_required
 def get_patient(patient_id):
     conn = get_db_connection()
-    patient = conn.execute('SELECT rowid, * FROM patients WHERE rowid = ?', (patient_id,)).fetchone()
+    cur = conn.curso()
+    patient = cur.execute('SELECT id, * FROM patients WHERE id = ?', (patient_id,)).fetchone()
     conn.close()
     if patient:
         return jsonify(dict(patient))
@@ -674,7 +794,8 @@ def update_patient(patient_id):
         values.append(patient_id)  # For the WHERE clause
         
         conn = get_db_connection()
-        conn.execute(f'UPDATE patients SET {set_clause} WHERE rowid = ?', values)
+        cur = conn.cursor()
+        cur.execute(f'UPDATE patients SET {set_clause} WHERE id = ?', values)
         conn.commit()
         conn.close()
         
@@ -685,211 +806,223 @@ def update_patient(patient_id):
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
-
 def migrate_database():
     """
-    Migrate the database to the new schema - removing medical vitals, adding dental fields + visit_date
+    Migrate the PostgreSQL database to the new schema - removing old vitals, adding dental fields + visit_date
     """
     conn = get_db_connection()
-    
+
     try:
-        # Check if migration is needed by looking for old columns
-        cursor = conn.execute("PRAGMA table_info(patients)")
-        columns = [column[1] for column in cursor.fetchall()]
-        
-        # Check if we still have old columns (indicating migration needed)
+        cur = conn.cursor()
+
+        # Check if migration is needed by inspecting columns
+        cur.execute("""
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_name = 'patients'
+        """)
+        columns = [col[0] for col in cur.fetchall()]
+
         old_columns = ['Poids', 'Taille', 'TA', 'T°', 'FC', 'PC', 'SaO2', 'hypothese_de_diagnostique', 'ordonnance', 'bilan']
-        needs_migration = any(col in columns for col in old_columns)
-        
-        # Also check if visit_date column is missing
+        needs_migration = any(col.lower() in [c.lower() for c in columns] for col in old_columns)
+
         if 'visit_date' not in columns:
             needs_migration = True
-        
+
         if needs_migration:
             print("Starting database migration...")
-            
-            # Create backup table
-            conn.execute('ALTER TABLE patients RENAME TO patients_backup')
-            
-            # Create new table with updated schema (dental-focused + visit_date)
-            conn.execute('''CREATE TABLE patients (
-                name TEXT NOT NULL, 
-                date_of_birth DATE, 
-                adresse TEXT, 
-                age INTEGER,
-                antecedents_tabagiques TEXT,
-                statut_implants TEXT,
-                frequence_fil_dentaire TEXT,
-                frequence_brossage TEXT,
-                allergies TEXT,
-                visit_date DATE,
-                created_at DATE
-            )''')
-            
-            # Copy existing data (only the columns that exist in both tables)
-            conn.execute('''INSERT INTO patients 
-                (name, date_of_birth, adresse, age, created_at)
+
+            # Rename current table
+            cur.execute('ALTER TABLE patients RENAME TO patients_backup')
+
+            # Create new table with updated schema (PostgreSQL syntax)
+            cur.execute('''
+                CREATE TABLE patients (
+                    id SERIAL PRIMARY KEY,
+                    name TEXT NOT NULL, 
+                    date_of_birth DATE, 
+                    adresse TEXT, 
+                    age INTEGER,
+                    antecedents_tabagiques TEXT,
+                    statut_implants TEXT,
+                    frequence_fil_dentaire TEXT,
+                    frequence_brossage TEXT,
+                    allergies TEXT,
+                    visit_date DATE,
+                    created_at DATE
+                )
+            ''')
+
+            # Copy only the matching columns (adjust as needed)
+            cur.execute('''
+                INSERT INTO patients (name, date_of_birth, adresse, age, created_at)
                 SELECT name, date_of_birth, adresse, age, created_at
-                FROM patients_backup''')
-            
-            # Drop backup table
-            conn.execute('DROP TABLE patients_backup')
-            
+                FROM patients_backup
+            ''')
+
+            # Drop old table
+            cur.execute('DROP TABLE patients_backup')
+
             print("Database migration completed successfully!")
+
         else:
-            print("No migration needed - database is already up to date")
-            
+            print("No migration needed - database is already up to date.")
+
     except Exception as e:
         print(f"Migration error: {e}")
-        # Rollback if there's an error
+
         try:
-            conn.execute('DROP TABLE IF EXISTS patients')
-            conn.execute('ALTER TABLE patients_backup RENAME TO patients')
-        except:
-            pass
+            # Attempt rollback
+            cur.execute('DROP TABLE IF EXISTS patients')
+            cur.execute('ALTER TABLE patients_backup RENAME TO patients')
+        except Exception as rollback_error:
+            print(f"Rollback failed: {rollback_error}")
+
         raise e
+
     finally:
         conn.commit()
         conn.close()
 
-@app.route('/payment', methods=['GET', 'POST'])
-def payment():
-    if request.method == 'GET':
-        # Check if user already has valid subscription
-        conn = get_db_connection()
-        subscription = conn.execute('''
-            SELECT * FROM subscriptions 
-            WHERE user_id = ? AND status IN ('active', 'incomplete', 'trialing')
-            AND current_period_end >= date('now')
-        ''', (session['user_id'],)).fetchone()
-        conn.close()
+# @app.route('/payment', methods=['GET', 'POST'])
+# def payment():
+#     if request.method == 'GET':
+#         # Check if user already has valid subscription
+#         conn = get_db_connection()
         
-        if subscription:
-            return redirect(url_for('index'))
+#         subscription = conn.execute('''
+#             SELECT * FROM subscriptions 
+#             WHERE user_id = ? AND status IN ('active', 'incomplete', 'trialing')
+#             AND current_period_end >= date('now')
+#         ''', (session['user_id'],)).fetchone()
+#         conn.close()
         
-        return render_template('payment.html')
+#         if subscription:
+#             return redirect(url_for('index'))
+        
+#         return render_template('payment.html')
     
-    # Handle payment processing
-    try:
-        data = request.get_json() if request.is_json else request.form
-        payment_method_id = data.get('payment_method_id')
+#     # Handle payment processing
+#     try:
+#         data = request.get_json() if request.is_json else request.form
+#         payment_method_id = data.get('payment_method_id')
         
-        if not payment_method_id:
-            return jsonify({'status': 'error', 'message': 'Payment method required'}), 400
+#         if not payment_method_id:
+#             return jsonify({'status': 'error', 'message': 'Payment method required'}), 400
         
-        conn = get_db_connection()
-        user = conn.execute('SELECT * FROM users WHERE id = ?', (session['user_id'],)).fetchone()
+#         conn = get_db_connection()
+#         user = conn.execute('SELECT * FROM users WHERE id = ?', (session['user_id'],)).fetchone()
         
-        # Create or retrieve Stripe customer
-        existing_subscription = conn.execute(
-            'SELECT stripe_customer_id FROM subscriptions WHERE user_id = ?', 
-            (session['user_id'],)
-        ).fetchone()
+#         # Create or retrieve Stripe customer
+#         existing_subscription = conn.execute(
+#             'SELECT stripe_customer_id FROM subscriptions WHERE user_id = ?', 
+#             (session['user_id'],)
+#         ).fetchone()
         
-        if existing_subscription and existing_subscription['stripe_customer_id']:
-            customer_id = existing_subscription['stripe_customer_id']
-            customer = stripe.Customer.retrieve(customer_id)
-            # Update payment method
-            stripe.PaymentMethod.attach(payment_method_id, customer=customer_id)
-            stripe.Customer.modify(customer_id, invoice_settings={'default_payment_method': payment_method_id})
-        else:
-            # Create new Stripe customer
-            customer = stripe.Customer.create(
-                email=user['email'],
-                payment_method=payment_method_id,
-                invoice_settings={'default_payment_method': payment_method_id}
-            )
-            customer_id = customer.id
+#         if existing_subscription and existing_subscription['stripe_customer_id']:
+#             customer_id = existing_subscription['stripe_customer_id']
+#             customer = stripe.Customer.retrieve(customer_id)
+#             # Update payment method
+#             stripe.PaymentMethod.attach(payment_method_id, customer=customer_id)
+#             stripe.Customer.modify(customer_id, invoice_settings={'default_payment_method': payment_method_id})
+#         else:
+#             # Create new Stripe customer
+#             customer = stripe.Customer.create(
+#                 email=user['email'],
+#                 payment_method=payment_method_id,
+#                 invoice_settings={'default_payment_method': payment_method_id}
+#             )
+#             customer_id = customer.id
         
-        # Create subscription with immediate payment
-        subscription = stripe.Subscription.create(
-            customer=customer_id,
-            items=[{'price': PRICE }],
-            default_payment_method=payment_method_id,
-            expand=['latest_invoice.payment_intent']
-        )
+#         # Create subscription with immediate payment
+#         subscription = stripe.Subscription.create(
+#             customer=customer_id,
+#             items=[{'price': PRICE }],
+#             default_payment_method=payment_method_id,
+#             expand=['latest_invoice.payment_intent']
+#         )
         
-        # Save subscription to database with the actual status from Stripe
-        conn.execute('''
-            INSERT OR REPLACE INTO subscriptions 
-            (user_id, stripe_customer_id, stripe_subscription_id, status, current_period_start, current_period_end)
-            VALUES (?, ?, ?, ?, ?, ?)
-        ''', (
-            session['user_id'],
-            customer_id,
-            subscription.id,
-            subscription.status,  # This will be 'active', 'incomplete', or 'trialing'
-            datetime.fromtimestamp(subscription.current_period_start).date(),
-            datetime.fromtimestamp(subscription.current_period_end).date()
-        ))
-        conn.commit()
-        conn.close()
+#         # Save subscription to database with the actual status from Stripe
+#         conn.execute('''
+#             INSERT OR REPLACE INTO subscriptions 
+#             (user_id, stripe_customer_id, stripe_subscription_id, status, current_period_start, current_period_end)
+#             VALUES (?, ?, ?, ?, ?, ?)
+#         ''', (
+#             session['user_id'],
+#             customer_id,
+#             subscription.id,
+#             subscription.status,  # This will be 'active', 'incomplete', or 'trialing'
+#             datetime.fromtimestamp(subscription.current_period_start).date(),
+#             datetime.fromtimestamp(subscription.current_period_end).date()
+#         ))
+#         conn.commit()
+#         conn.close()
         
-        # Return success with redirect
-        return jsonify({
-            'status': 'success',
-            'subscription_status': subscription.status,
-            'redirect': url_for('index')
-        })
+#         # Return success with redirect
+#         return jsonify({
+#             'status': 'success',
+#             'subscription_status': subscription.status,
+#             'redirect': url_for('index')
+#         })
         
-    except stripe.error.StripeError as e:
-        return jsonify({'status': 'error', 'message': str(e)}), 400
-    except Exception as e:
-        return jsonify({'status': 'error', 'message': 'Payment processing failed'}), 500
+#     except stripe.error.StripeError as e:
+#         return jsonify({'status': 'error', 'message': str(e)}), 400
+#     except Exception as e:
+#         return jsonify({'status': 'error', 'message': 'Payment processing failed'}), 500
     
-@app.route('/webhook', methods=['POST'])
-def stripe_webhook():
-    """Handle Stripe webhooks for subscription updates."""
-    payload = request.get_data(as_text=True)
-    sig_header = request.headers.get('Stripe-Signature')
-    endpoint_secret = 'whsec_your_webhook_secret'  # Your webhook secret from Stripe
+# @app.route('/webhook', methods=['POST'])
+# def stripe_webhook():
+#     """Handle Stripe webhooks for subscription updates."""
+#     payload = request.get_data(as_text=True)
+#     sig_header = request.headers.get('Stripe-Signature')
+#     endpoint_secret = 'whsec_your_webhook_secret'  # Your webhook secret from Stripe
     
-    try:
-        event = stripe.Webhook.construct_event(payload, sig_header, endpoint_secret)
-    except ValueError:
-        return 'Invalid payload', 400
-    except stripe.error.SignatureVerificationError:
-        return 'Invalid signature', 400
+#     try:
+#         event = stripe.Webhook.construct_event(payload, sig_header, endpoint_secret)
+#     except ValueError:
+#         return 'Invalid payload', 400
+#     except stripe.error.SignatureVerificationError:
+#         return 'Invalid signature', 400
     
-    # Handle subscription events
-    if event['type'] == 'invoice.payment_succeeded':
-        subscription = event['data']['object']['subscription']
-        update_subscription_status(subscription, 'active')
-    elif event['type'] == 'invoice.payment_failed':
-        subscription = event['data']['object']['subscription']
-        update_subscription_status(subscription, 'past_due')
-    elif event['type'] == 'customer.subscription.deleted':
-        subscription_id = event['data']['object']['id']
-        update_subscription_status(subscription_id, 'cancelled')
+#     # Handle subscription events
+#     if event['type'] == 'invoice.payment_succeeded':
+#         subscription = event['data']['object']['subscription']
+#         update_subscription_status(subscription, 'active')
+#     elif event['type'] == 'invoice.payment_failed':
+#         subscription = event['data']['object']['subscription']
+#         update_subscription_status(subscription, 'past_due')
+#     elif event['type'] == 'customer.subscription.deleted':
+#         subscription_id = event['data']['object']['id']
+#         update_subscription_status(subscription_id, 'cancelled')
     
-    return 'Success', 200
+#     return 'Success', 200
 
-def update_subscription_status(subscription_id, status):
-    """Update subscription status in database."""
-    try:
-        # Get subscription details from Stripe
-        if status != 'cancelled':
-            stripe_sub = stripe.Subscription.retrieve(subscription_id)
-            conn = get_db_connection()
-            conn.execute('''
-                UPDATE subscriptions 
-                SET status = ?, current_period_start = ?, current_period_end = ?
-                WHERE stripe_subscription_id = ?
-            ''', (
-                status,
-                datetime.fromtimestamp(stripe_sub.current_period_start).date(),
-                datetime.fromtimestamp(stripe_sub.current_period_end).date(),
-                subscription_id
-            ))
-        else:
-            conn = get_db_connection()
-            conn.execute('UPDATE subscriptions SET status = ? WHERE stripe_subscription_id = ?', 
-                        (status, subscription_id))
+# def update_subscription_status(subscription_id, status):
+#     """Update subscription status in database."""
+#     try:
+#         # Get subscription details from Stripe
+#         if status != 'cancelled':
+#             stripe_sub = stripe.Subscription.retrieve(subscription_id)
+#             conn = get_db_connection()
+#             conn.execute('''
+#                 UPDATE subscriptions 
+#                 SET status = ?, current_period_start = ?, current_period_end = ?
+#                 WHERE stripe_subscription_id = ?
+#             ''', (
+#                 status,
+#                 datetime.fromtimestamp(stripe_sub.current_period_start).date(),
+#                 datetime.fromtimestamp(stripe_sub.current_period_end).date(),
+#                 subscription_id
+#             ))
+#         else:
+#             conn = get_db_connection()
+#             conn.execute('UPDATE subscriptions SET status = ? WHERE stripe_subscription_id = ?', 
+#                         (status, subscription_id))
         
-        conn.commit()
-        conn.close()
-    except Exception as e:
-        print(f"Error updating subscription status: {e}")
+#         conn.commit()
+#         conn.close()
+#     except Exception as e:
+#         print(f"Error updating subscription status: {e}")
 
 @app.route('/landing')
 def landing():

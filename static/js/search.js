@@ -150,13 +150,14 @@ function loadPatients(q = '') {
   fetch(`/search?q=${encodeURIComponent(q)}`)
     .then(res => res.json())
     .then(data => {
+      console.log(data);
       resultsTable.innerHTML = '';
       data.forEach(p => {
         const tr = document.createElement('tr');
         tr.className = "cursor-pointer hover:bg-gray-800 transition-colors";
         
         // Open invoice modal when clicking the row
-        tr.onclick = () => openInvoiceModal(p.rowid);
+        tr.onclick = () => openInvoiceModal(p.id);
 
         // Include the created_at field first
         const createdAtTd = document.createElement('td');
@@ -186,9 +187,9 @@ function loadPatients(q = '') {
         actionTd.className = "p-2 border";
         actionTd.innerHTML = `
           <div class="flex space-x-2 justify-center">
-            <button class="text-blue-500 hover:text-blue-700" onclick="event.stopPropagation(); editPatient(${p.rowid})">Modifier</button>
-            <button class="text-red-500 hover:text-red-700" onclick="event.stopPropagation(); deletePatient(${p.rowid})">Supprimer</button>
-            <button class="text-green-500 hover:text-green-700" onclick="event.stopPropagation(); window.location.href='/patient/${p.rowid}'">Détails</button>
+            <button class="text-blue-500 hover:text-blue-700" onclick="event.stopPropagation(); editPatient(${p.id})">Modifier</button>
+            <button class="text-red-500 hover:text-red-700" onclick="event.stopPropagation(); deletePatient(${p.id})">Supprimer</button>
+            <button class="text-green-500 hover:text-green-700" onclick="event.stopPropagation(); window.location.href='/patient/${p.id}'">Détails</button>
           </div>
         `;
         tr.appendChild(actionTd);
@@ -213,7 +214,7 @@ function loadPatients(q = '') {
       .then(res => res.json())
       .then(patient => {
         // Populate the edit form
-        document.getElementById('editId').value = patient.rowid;
+        document.getElementById('editId').value = patient.id;
         
         // Updated fields array to match new schema
         const fields = ['name', 'date_of_birth', 'adresse', 'age', 
