@@ -8,6 +8,97 @@
   <meta name="keywords" content="cabinet dentaire Dakar, dentiste Sénégal, soins dentaires modernes, Dr Sacko, santé bucco-dentaire, cabinet dentaire La Renaissance" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&family=Space+Grotesk:wght@400;600&display=swap" rel="stylesheet" />
   <style>
+
+      /* Contact Section Styles */
+  #contact {
+    background: #f5fafe;
+    padding: 3rem 1.5rem;
+    border-radius: 1rem;
+    box-shadow: 0 4px 16px rgba(0, 153, 204, 0.1);
+    max-width: 960px;
+    margin: 0 auto 4rem;
+  }
+
+  #contact .section-header {
+    text-align: center;
+    margin-bottom: 2rem;
+  }
+
+  #contact .section-header h2 {
+    color: #0277bd;
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 2rem;
+    margin-bottom: 0.3rem;
+  }
+
+  #contact .section-header p {
+    color: #003f5c;
+    font-size: 1.1rem;
+  }
+
+  .contact-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .contact-form .form-group input,
+  .contact-form .form-group textarea {
+    width: 100%;
+    padding: 1rem 1.2rem;
+    border: 2px solid #0277bd;
+    border-radius: 0.75rem;
+    font-size: 1rem;
+    font-family: 'Inter', sans-serif;
+    color: #1a2a3a;
+    transition: border-color 0.3s ease;
+    resize: vertical;
+  }
+
+  .contact-form .form-group input::placeholder,
+  .contact-form .form-group textarea::placeholder {
+    color: #7eaed9;
+  }
+
+  .contact-form .form-group input:focus,
+  .contact-form .form-group textarea:focus {
+    border-color: #0288d1;
+    outline: none;
+    box-shadow: 0 0 8px rgba(2, 136, 209, 0.4);
+  }
+
+  .btn-primary {
+    align-self: flex-start;
+    background-color: #0277bd;
+    color: white;
+    padding: 0.75rem 2.5rem;
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 600;
+    font-size: 1.1rem;
+    border: none;
+    border-radius: 1rem;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+  }
+
+  .btn-primary:hover,
+  .btn-primary:focus {
+    background-color: #0288d1;
+  }
+
+  /* Responsive tweaks */
+  @media (max-width: 600px) {
+    #contact {
+      padding: 2rem 1rem;
+    }
+
+    .btn-primary {
+      width: 100%;
+      text-align: center;
+      padding: 0.85rem 0;
+    }
+  }
+
     /* Your original styles here, unchanged */
     * {
       margin: 0;
@@ -161,6 +252,25 @@
       </p>
     </section>
   </main>
+<!-- Replace your existing contact section HTML with this updated markup -->
+<section id="contact">
+  <div class="section-header">
+    <h2>Contactez-nous</h2>
+    <p>Nous sommes disponibles pour répondre à toutes vos questions</p>
+  </div>
+  <form action="https://formspree.io/f/mnnzveyj" method="POST" class="contact-form" novalidate>
+    <div class="form-group">
+      <input type="text" name="name" placeholder="Votre nom" required />
+    </div>
+    <div class="form-group">
+      <input type="email" name="email" placeholder="Votre email" required />
+    </div>
+    <div class="form-group">
+      <textarea name="message" rows="5" placeholder="Votre message..." required></textarea>
+    </div>
+    <button type="submit" class="btn-primary">Envoyer</button>
+  </form>
+</section>
 
   <footer>
     &copy; 2025 Cabinet La Renaissance &mdash; Tous droits réservés
