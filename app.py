@@ -22,6 +22,14 @@ PRICE = os.environ.get('PRICE')
 STRIPE_SECRET_KEY = os.environ.get('STRIPE_SECRET_KEY')
 ENDPOINT_SECRET = os.environ.get('ENDPOINT_SECRET')
 
+USERNAMES = {'docteur-sacko', 'secretaire1'}
+
+USERNAME = os.environ.get('USERNAME')
+USERNAME1 = os.environ.get('USERNAME1')
+
+PASSWORD = os.environ.get('PASSWORD')
+PASSWORD1 = os.environ.get('PASSWORD1')
+
 app = Flask(__name__)
 app.secret_key = 'your-secret-key-change-this'  # Change this to a secure secret key
 stripe.api_key = STRIPE_SECRET_KEY
@@ -43,36 +51,36 @@ def verify_password(stored_password, provided_password):
     pwdhash = hashlib.pbkdf2_hmac('sha256', provided_password.encode('utf-8'), salt.encode('utf-8'), 100000)
     return pwdhash.hex() == stored_hash
 
-def login_required(f):
-    """Decorator to require login for routes."""
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if 'user_id' not in session:
-            return redirect(url_for('login'))
-        return f(*args, **kwargs)
-    return decorated_function
+# def login_required(f):
+#     """Decorator to require login for routes."""
+#     @wraps(f)
+#     def decorated_function(*args, **kwargs):
+#         if 'user_id' not in session:
+#             return redirect(url_for('login'))
+#         return f(*args, **kwargs)
+#     return decorated_function
 
-def subscription_required(f):
-    """Decorator to require active subscription."""
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if 'user_id' not in session:
-            return redirect(url_for('login'))
+# def subscription_required(f):
+#     """Decorator to require active subscription."""
+#     @wraps(f)
+#     def decorated_function(*args, **kwargs):
+#         if 'user_id' not in session:
+#             return redirect(url_for('login'))
         
-        # Check if user has valid subscription (active, incomplete, or trialing)
-        conn = get_db_connection()
-        subscription = conn.execute('''
-            SELECT * FROM subscriptions 
-            WHERE user_id = ? AND status IN ('active', 'incomplete', 'trialing')
-            AND current_period_end >= date('now')
-        ''', (session['user_id'],)).fetchone()
-        conn.close()
+#         # Check if user has valid subscription (active, incomplete, or trialing)
+#         conn = get_db_connection()
+#         subscription = conn.execute('''
+#             SELECT * FROM subscriptions 
+#             WHERE user_id = ? AND status IN ('active', 'incomplete', 'trialing')
+#             AND current_period_end >= date('now')
+#         ''', (session['user_id'],)).fetchone()
+#         conn.close()
         
-        if not subscription:
-            return redirect(url_for('payment'))
+#         if not subscription:
+#             return redirect(url_for('payment'))
         
-        return f(*args, **kwargs)
-    return decorated_function
+#         return f(*args, **kwargs)
+#     return decorated_function
 
 # Set up the SMTP server
 smtp_server = "smtp.gmail.com"
@@ -82,7 +90,7 @@ your_email = "jonathanjerabe@gmail.com"
 your_password = "ajrn mros lkzm urnu"
 
 acteur_inf = "jonathanjerabe@gmail.com"
-acteur_med = "cablarenaissance@gmail.com"
+acteur_med = "jonathanjerabe@gmail.com"
 
 import random
 import string
@@ -130,143 +138,132 @@ def send_verification_email(email, code):
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    if 'user_id' in session:
-        return redirect(url_for('landing'))
-    
-    if request.method == 'GET':
-        return render_template('login.html')
+    # if 'user_id' in session:
+    #     return redirect(url_for('landing'))
     
     data = request.get_json() if request.is_json else request.form
-    email = data.get('email', '').strip().lower()
+    username = data.get('username', '').strip().lower()
     password = data.get('password', '')
     
-    if not email or not password:
-        return jsonify({'status': 'error', 'message': 'Email and password are required'}), 400
+    print(username, password)
+    if not username or not password:
+        return jsonify({'status': 'error', 'message': 'Username and password are required'}), 400
     
-    try:
-        conn = get_db_connection()
-        user = conn.execute('SELECT id, email, password_hash FROM users WHERE email = ? AND is_active = 1', 
-                           (email,)).fetchone()
-        conn.close()
+    if username in USERNAMES:
+        print('made it here', username)
+        if password == PASSWORD or  password == PASSWORD1:
+            return jsonify({'status': 'success', 'redirect': url_for('index')})
         
-        if not user or not verify_password(user['password_hash'], password):
-            return jsonify({'status': 'error', 'message': 'Invalid email or password'}), 401
-        
-        session['user_id'] = user['id']
-        session['email'] = user['email']
-        
-        return jsonify({'status': 'success', 'redirect': url_for('landing')})
-        
-    except Exception as e:
-        return jsonify({'status': 'error', 'message': 'Login failed'}), 500
+    return jsonify({'status': 'error', 'message': 'Login failed'}), 500
     
-@app.route('/register', methods=['GET', 'POST'])
-def register():
-    if request.method == 'GET':
-        return render_template('register.html')
+# @app.route('/register', methods=['GET', 'POST'])
+# def register():
+#     if request.method == 'GET':
+#         return render_template('register.html')
     
-    data = request.get_json() if request.is_json else request.form
-    email = data.get('email', '').strip().lower()
-    password = data.get('password', '')
-    name = data.get('name', '').strip()
+#     data = request.get_json() if request.is_json else request.form
+#     email = data.get('email', '').strip().lower()
+#     password = data.get('password', '')
+#     name = data.get('name', '').strip()
     
-    if not email or not password or not name:
-        return jsonify({'status': 'error', 'message': 'Name, email and password are required'}), 400
+#     if not email or not password or not name:
+#         return jsonify({'status': 'error', 'message': 'Name, email and password are required'}), 400
     
-    if len(password) < 6:
-        return jsonify({'status': 'error', 'message': 'Password must be at least 6 characters'}), 400
+#     if len(password) < 6:
+#         return jsonify({'status': 'error', 'message': 'Password must be at least 6 characters'}), 400
     
-    try:
-        conn = get_db_connection()
-        existing_user = conn.execute('SELECT id FROM users WHERE email = ?', (email,)).fetchone()
-        if existing_user:
-            conn.close()
-            return jsonify({'status': 'error', 'message': 'Email already registered'}), 400
+#     try:
+#         conn = get_db_connection()
+#         existing_user = conn.execute('SELECT id FROM users WHERE email = ?', (email,)).fetchone()
+#         if existing_user:
+#             conn.close()
+#             return jsonify({'status': 'error', 'message': 'Email already registered'}), 400
         
-        conn.close()
+#         conn.close()
         
-        # Generate and send verification code
-        code = generate_verification_code()
-        if not send_verification_email(email, code):
-            return jsonify({'status': 'error', 'message': 'Failed to send verification email'}), 500
+#         # Generate and send verification code
+#         code = generate_verification_code()
+#         if not send_verification_email(email, code):
+#             return jsonify({'status': 'error', 'message': 'Failed to send verification email'}), 500
         
-        verification_codes[email] = {
-            'code': code,
-            'password': password,
-            'name': name,
-            'timestamp': datetime.now()
-        }
+#         verification_codes[email] = {
+#             'code': code,
+#             'password': password,
+#             'name': name,
+#             'timestamp': datetime.now()
+#         }
         
-        return jsonify({'status': 'success', 'message': 'Verification code sent to your email', 'email': email})
+#         return jsonify({'status': 'success', 'message': 'Verification code sent to your email', 'email': email})
         
-    except Exception as e:
-        return jsonify({'status': 'error', 'message': 'Registration failed'}), 500
+#     except Exception as e:
+#         return jsonify({'status': 'error', 'message': 'Registration failed'}), 500
     
-@app.route('/verify-email', methods=['POST'])
-def verify_email():
-    data = request.get_json() if request.is_json else request.form
-    email = data.get('email', '').strip().lower()
-    code = data.get('code', '').strip()
-    
-    if not email or not code:
-        return jsonify({'status': 'error', 'message': 'Email and code are required'}), 400
-    
-    # Check if verification data exists
-    if email not in verification_codes:
-        return jsonify({'status': 'error', 'message': 'No verification request found'}), 400
-    
-    verification_data = verification_codes[email]
-    
-    # Check if code has expired (10 minutes)
-    if datetime.now() - verification_data['timestamp'] > timedelta(minutes=10):
-        del verification_codes[email]
-        return jsonify({'status': 'error', 'message': 'Verification code has expired'}), 400
-    
-    # Check if code matches
-    if verification_data['code'] != code:
-        return jsonify({'status': 'error', 'message': 'Invalid verification code'}), 400
-    
-    try:
-        # Create the user account with name
-        conn = get_db_connection()
-        password_hash = hash_password(verification_data['password'])
-        cursor = conn.execute('INSERT INTO users (email, password_hash) VALUES (?, ?)', 
-                             (email, password_hash))
-        user_id = cursor.lastrowid
-        conn.commit()
-        conn.close()
-        
-        # Clean up verification data
-        del verification_codes[email]
-        
-        # Set session
-        session['user_id'] = user_id
-        session['email'] = email
-        session['name'] = verification_data['name']
-        
-        return jsonify({'status': 'success', 'redirect': url_for('payment')})
-        
-    except Exception as e:
-        return jsonify({'status': 'error', 'message': 'Account creation failed'}), 500
 
-@app.route('/resend-code', methods=['POST'])
-def resend_code():
-    data = request.get_json() if request.is_json else request.form
-    email = data.get('email', '').strip().lower()
+# @app.route('/verify-email', methods=['POST'])
+# def verify_email():
+#     data = request.get_json() if request.is_json else request.form
+#     email = data.get('email', '').strip().lower()
+#     code = data.get('code', '').strip()
     
-    if not email or email not in verification_codes:
-        return jsonify({'status': 'error', 'message': 'No verification request found'}), 400
+#     if not email or not code:
+#         return jsonify({'status': 'error', 'message': 'Email and code are required'}), 400
     
-    # Generate new code
-    code = generate_verification_code()
-    if not send_verification_email(email, code):
-        return jsonify({'status': 'error', 'message': 'Failed to send verification email'}), 500
+#     # Check if verification data exists
+#     if email not in verification_codes:
+#         return jsonify({'status': 'error', 'message': 'No verification request found'}), 400
     
-    # Update verification data
-    verification_codes[email]['code'] = code
-    verification_codes[email]['timestamp'] = datetime.now()
+#     verification_data = verification_codes[email]
     
-    return jsonify({'status': 'success', 'message': 'New verification code sent'})
+#     # Check if code has expired (10 minutes)
+#     if datetime.now() - verification_data['timestamp'] > timedelta(minutes=10):
+#         del verification_codes[email]
+#         return jsonify({'status': 'error', 'message': 'Verification code has expired'}), 400
+    
+#     # Check if code matches
+#     if verification_data['code'] != code:
+#         return jsonify({'status': 'error', 'message': 'Invalid verification code'}), 400
+    
+#     try:
+#         # Create the user account with name
+#         conn = get_db_connection()
+#         password_hash = hash_password(verification_data['password'])
+#         cursor = conn.execute('INSERT INTO users (email, password_hash) VALUES (?, ?)', 
+#                              (email, password_hash))
+#         user_id = cursor.lastrowid
+#         conn.commit()
+#         conn.close()
+        
+#         # Clean up verification data
+#         del verification_codes[email]
+        
+#         # Set session
+#         session['user_id'] = user_id
+#         session['email'] = email
+#         session['name'] = verification_data['name']
+        
+#         return jsonify({'status': 'success', 'redirect': url_for('payment')})
+        
+#     except Exception as e:
+#         return jsonify({'status': 'error', 'message': 'Account creation failed'}), 500
+
+# @app.route('/resend-code', methods=['POST'])
+# def resend_code():
+#     data = request.get_json() if request.is_json else request.form
+#     email = data.get('email', '').strip().lower()
+    
+#     if not email or email not in verification_codes:
+#         return jsonify({'status': 'error', 'message': 'No verification request found'}), 400
+    
+#     # Generate new code
+#     code = generate_verification_code()
+#     if not send_verification_email(email, code):
+#         return jsonify({'status': 'error', 'message': 'Failed to send verification email'}), 500
+    
+#     # Update verification data
+#     verification_codes[email]['code'] = code
+#     verification_codes[email]['timestamp'] = datetime.now()
+    
+#     return jsonify({'status': 'success', 'message': 'New verification code sent'})
 
 # Function to get DB connection
 def get_db_connection():
@@ -408,7 +405,7 @@ class InvoicePDF(FPDF):
 
 
 @app.route('/generate_invoice/<int:patient_id>', methods=['POST'])
-@subscription_required
+# @subscription_required
 def generate_invoice(patient_id):
     try:
         data = request.get_json()
@@ -570,14 +567,14 @@ def init_db():
     migrate_database()
 
 @app.route('/')
-@subscription_required
+# @subscription_required
 def index():
     """Main application page - only accessible with valid subscription."""
     init_db()
     return render_template('index.html')
 
 @app.route('/search')
-@subscription_required
+# @subscription_required
 def search():
     q = request.args.get('q', '')
     conn = get_db_connection()
@@ -590,7 +587,7 @@ def search():
 from datetime import date
 
 @app.route('/add', methods=['POST'])
-@subscription_required
+# @subscription_required
 def add():
     data = request.get_json() or {}
     if not data.get('name'):
@@ -622,7 +619,7 @@ def add():
         return jsonify({'status': 'error', 'message': str(e)}), 500
     
 @app.route('/delete/<int:rowid>', methods=['DELETE'])
-@subscription_required
+# @subscription_required
 def delete(rowid):
     conn = get_db_connection()
     conn.execute('DELETE FROM patients WHERE rowid = ?', (rowid,))
@@ -631,7 +628,7 @@ def delete(rowid):
     return jsonify({'status': 'deleted'})
 
 @app.route('/patient/<int:patient_id>')
-@subscription_required
+# @subscription_required
 def patient_detail(patient_id):
     conn = get_db_connection()
     patient = conn.execute('SELECT rowid, * FROM patients WHERE rowid = ?', (patient_id,)).fetchone()
@@ -640,7 +637,7 @@ def patient_detail(patient_id):
     return render_template('patient.html', patient=patient, visits=visits) if patient else ("Patient not found", 404)
 
 @app.route('/get_patient/<int:patient_id>')
-@subscription_required
+# @subscription_required
 def get_patient(patient_id):
     conn = get_db_connection()
     patient = conn.execute('SELECT rowid, * FROM patients WHERE rowid = ?', (patient_id,)).fetchone()
@@ -650,7 +647,7 @@ def get_patient(patient_id):
     return jsonify({'status': 'error', 'message': 'Patient not found'}), 404
 
 @app.route('/update/<int:patient_id>', methods=['PUT'])
-@subscription_required
+# @subscription_required
 def update_patient(patient_id):
     data = request.get_json() or {}
     if not data.get('name'):
@@ -895,7 +892,6 @@ def update_subscription_status(subscription_id, status):
         print(f"Error updating subscription status: {e}")
 
 @app.route('/landing')
-@login_required
 def landing():
     """Landing page that checks subscription status and redirects accordingly."""
     # Check if user has active subscription
@@ -923,8 +919,8 @@ def start():
 @app.route('/logout')
 def logout():
     """Clear session and redirect to start."""
-    session.clear()
-    return redirect(url_for('start'))
+    # session.clear()
+    return render_template('login.html')
 
 if __name__ == '__main__':
     init_db()
