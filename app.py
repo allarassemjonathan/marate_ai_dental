@@ -734,37 +734,46 @@ def add():
 
 #     except Exception as e:
 #         return jsonify({'status': 'error', 'message': str(e)}), 500
-    
+
 @app.route('/delete/<int:rowid>', methods=['DELETE'])
 # @subscription_required
 def delete(rowid):
     conn = get_db_connection()
     cur = conn.cursor()
-    cur.execute('DELETE FROM patients WHERE id = ?', (rowid,))
+    cur.execute('DELETE FROM patients WHERE id = %s', (rowid,))
     conn.commit()
-    conn.close()    
+    conn.close()
     return jsonify({'status': 'deleted'})
+
 
 @app.route('/patient/<int:patient_id>')
 # @subscription_required
 def patient_detail(patient_id):
     conn = get_db_connection()
     cur = conn.cursor()
-    patient = cur.execute('SELECT id, * FROM patients WHERE id = ?', (patient_id,)).fetchone()
-    visits = cur.execute('SELECT * FROM visits WHERE patient_id = ?', (patient_id,)).fetchall()
+    cur.execute('SELECT id, * FROM patients WHERE id = %s', (patient_id,))
+    patient = cur.fetchone()
+    cur.execute('SELECT * FROM visits WHERE patient_id = %s', (patient_id,))
+    visits = cur.fetchall()
     conn.close()
-    return render_template('patient.html', patient=patient, visits=visits) if patient else ("Patient not found", 404)
+    if patient:
+        return render_template('patient.html', patient=patient, visits=visits)
+    else:
+        return ("Patient not found", 404)
+
 
 @app.route('/get_patient/<int:patient_id>')
 # @subscription_required
 def get_patient(patient_id):
     conn = get_db_connection()
-    cur = conn.curso()
-    patient = cur.execute('SELECT id, * FROM patients WHERE id = ?', (patient_id,)).fetchone()
+    cur = conn.cursor()
+    cur.execute('SELECT id, * FROM patients WHERE id = %s', (patient_id,))
+    patient = cur.fetchone()
     conn.close()
     if patient:
         return jsonify(dict(patient))
     return jsonify({'status': 'error', 'message': 'Patient not found'}), 404
+
 
 @app.route('/update/<int:patient_id>', methods=['PUT'])
 # @subscription_required
@@ -774,35 +783,36 @@ def update_patient(patient_id):
         return jsonify({'status': 'error', 'message': 'Name is required'}), 400
 
     patient_name = data.get('name')
-    try:   
-         # Define allowed columns for the new schema
+    try:
         allowed_columns = {
-            'name', 'date_of_birth', 'adresse', 'age', 
-            'antecedents_tabagiques', 'statut_implants', 
+            'name', 'date_of_birth', 'adresse', 'age',
+            'antecedents_tabagiques', 'statut_implants',
             'frequence_fil_dentaire', 'frequence_brossage', 'allergies'
         }
-
-        # Filter out any old/invalid columns that might be sent
         filtered_data = {k: v for k, v in data.items() if k in allowed_columns}
-
+        
+        for k, v in filtered_data.items():
+            if k in allowed_columns and v == '':
+                filtered_data[k] = None
+            else:
+                filtered_data[k] = v
         if not filtered_data:
             return jsonify({'status': 'error', 'message': 'No valid data to update'}), 400
-        
-        # Prepare SQL UPDATE statement
-        set_clause = ", ".join([f"{k} = ?" for k in filtered_data.keys()])
+
+        set_clause = ", ".join([f"{k} = %s" for k in filtered_data.keys()])
         values = list(filtered_data.values())
-        values.append(patient_id)  # For the WHERE clause
-        
+        values.append(patient_id)  # For WHERE clause
+
         conn = get_db_connection()
         cur = conn.cursor()
-        cur.execute(f'UPDATE patients SET {set_clause} WHERE id = ?', values)
+        cur.execute(f'UPDATE patients SET {set_clause} WHERE id = %s', values)
         conn.commit()
         conn.close()
-        
-        # send email because the patient is updated
+
+        # send email about update
         email_reception(data['name'], '', f'Cher medecin, certaines infos par rapport au patient {patient_name} ont été modifié', None, acteur_med)
-        
-        return jsonify({'status': 'success'})   
+
+        return jsonify({'status': 'success'})
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
 

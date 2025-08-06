@@ -195,9 +195,11 @@ function loadPatients(q = '') {
           <div class="flex space-x-2 justify-center">
             <button class="text-blue-500 hover:text-blue-700" onclick="event.stopPropagation(); editPatient(${p.id})">Modifier</button>
             <button class="text-red-500 hover:text-red-700" onclick="event.stopPropagation(); deletePatient(${p.id})">Supprimer</button>
-            <button class="text-green-500 hover:text-green-700" onclick="event.stopPropagation(); window.location.href='/patient/${p.id}'">Détails</button>
+            
           </div>
         `;
+
+        // <button class="text-green-500 hover:text-green-700" onclick="event.stopPropagation(); window.location.href='/patient/${p.id}'">Détails</button>
         tr.appendChild(actionTd);
 
         resultsTable.appendChild(tr);
