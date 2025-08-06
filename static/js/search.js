@@ -173,6 +173,12 @@ function loadPatients(q = '') {
         ].forEach(k => {
           const td = document.createElement('td');
           td.className = "p-2 border";
+
+          if (k == 'age' && p[k]) p[k] += ' ans';
+          if (k == 'date_of_birth' && typeof p[k] === 'string') {
+            p[k] = new Date(p[k]).toISOString().split('T')[0];
+          }
+          
           let content = p[k] || '';
           if (content.length > 30) {
             content = content.substring(0, 30) + '...';
