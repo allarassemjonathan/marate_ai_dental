@@ -893,6 +893,10 @@ def migrate_database():
     finally:
         conn.commit()
         conn.close()
+        
+@app.route('/renaissance')
+def renaissance_website():
+    return render_template('renaissance.html')
 
 # @app.route('/payment', methods=['GET', 'POST'])
 # def payment():
