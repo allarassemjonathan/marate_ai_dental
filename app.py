@@ -676,14 +676,6 @@ def add():
                         print('issue is here 2 ')
                         return jsonify({'status': 'error', 'message': f'{field} must be a number'}), 400
 
-        # Notify reception if temperature is missing
-        if data.get('name') is not None:
-            email_reception(
-                data['name'], '',
-                'Chers infirmiers, vous avez un nouveau patient! Faite-le entrer dès que vous êtes prêt',
-                None, acteur_inf
-            )
-
         print(data)
         print(data.items())
 
@@ -835,7 +827,7 @@ def update_patient(patient_id):
         conn.close()
 
         # send email about update
-        email_reception(data['name'], '', f'Cher medecin, certaines infos par rapport au patient {patient_name} ont été modifié', None, acteur_med)
+        # email_reception(data['name'], '', f'Cher medecin, certaines infos par rapport au patient {patient_name} ont été modifié', None, acteur_med)
 
         return jsonify({'status': 'success'})
     except Exception as e:
