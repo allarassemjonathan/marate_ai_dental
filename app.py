@@ -284,13 +284,23 @@ class InvoicePDF(FPDF):
     def header(self):
         try:
             logo_url = "https://allarassemjonathan.github.io/marate_white.png"
-            response = requests.get(logo_url, timeout=10)
+            logo_cabinet = "https://allarassemjonathan.github.io/logo_renaissance.jpeg"
+            # response = requests.get(logo_url, timeout=10)
+            # if response.status_code == 200:
+            #     with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as tmp_file:
+            #         tmp_file.write(response.content)
+            #         tmp_path = tmp_file.name
+            #     self.image(tmp_path, x=10, y=8, w=55)
+            #     os.remove(tmp_path)
+            
+            response = requests.get(logo_cabinet, timeout=10)
             if response.status_code == 200:
-                with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as tmp_file:
+                with tempfile.NamedTemporaryFile(delete=False, suffix='.jpeg') as tmp_file:
                     tmp_file.write(response.content)
                     tmp_path = tmp_file.name
-                self.image(tmp_path, x=10, y=8, w=25)
+                self.image(tmp_path, x=10, y=6, w=25)
                 os.remove(tmp_path)
+                
         except Exception as e:
             print(f"Could not load logo: {e}")
 
@@ -310,6 +320,7 @@ class InvoicePDF(FPDF):
         right_x = 110
 
         # Left side: patient
+        self.ln()
         self.set_xy(left_x, self.get_y())
         self.cell(90, line_height, f"Nom: {patient['name']}", ln=0)
 
@@ -406,9 +417,11 @@ class InvoicePDF(FPDF):
         self.cell(0, 10, f"MONTANT À PAYER PAR LE PATIENT: {patient_amount} Fcfa", ln=1, align='C')
         self.set_text_color(0)
 
+from flask import request, jsonify, send_file
+from datetime import datetime
+import io
 
 @app.route('/generate_invoice/<int:patient_id>', methods=['POST'])
-# @subscription_required
 def generate_invoice(patient_id):
     try:
         data = request.get_json()
@@ -416,6 +429,8 @@ def generate_invoice(patient_id):
             return jsonify({'status': 'error', 'message': 'Invoice items are required'}), 400
 
         items = data['items']
+        insurance_percentage = int(data.get('insurance', 80))  # Default to 80%
+
         for item in items:
             if not all(key in item for key in ['name', 'quantity', 'price']):
                 return jsonify({'status': 'error', 'message': 'Each item must have name, quantity, and price'}), 400
@@ -424,20 +439,30 @@ def generate_invoice(patient_id):
                 float(item['price'])
             except (ValueError, TypeError):
                 return jsonify({'status': 'error', 'message': 'Quantity and price must be numeric'}), 400
+            
+            # Add insurance to each item for PDF logic
+            item['insurance'] = insurance_percentage
 
         conn = get_db_connection()
-        patient = conn.execute('SELECT id, * FROM patients WHERE id = ?', (patient_id,)).fetchone()
+        cur = conn.cursor()
+        cur.execute(
+            'SELECT id, name, date_of_birth, adresse, telephone, age, antecedents_tabagiques, statut_implants, frequence_fil_dentaire, frequence_brossage, allergies, created_at FROM patients WHERE id = %s',
+            (patient_id,)
+        )
+        patient = cur.fetchone()
         conn.close()
 
         if not patient:
             return jsonify({'status': 'error', 'message': 'Patient not found'}), 404
 
+        patient = dict(patient)
+
         pdf = InvoicePDF()
         pdf.add_page()
         pdf.add_patient_info(patient)
-        pdf.add_invoice_table(items)
+        pdf.add_invoice_table(items)  # Insurance is now inside each item
 
-        pdf_data = pdf.output(dest='S').encode('latin1')  # 'S' returns PDF as str; encode to bytes
+        pdf_data = pdf.output(dest='S').encode('latin1')
         pdf_buffer = io.BytesIO(pdf_data)
         pdf_buffer.seek(0)
 
@@ -451,7 +476,6 @@ def generate_invoice(patient_id):
     except Exception as e:
         print(f"Error generating invoice: {str(e)}")
         return jsonify({'status': 'error', 'message': 'Internal server error'}), 500
-
 
 def email_reception(firstname, lastname, body, plot, recipient_email):
 
@@ -524,6 +548,7 @@ def init_db():
             name TEXT NOT NULL,
             date_of_birth DATE,
             adresse TEXT,
+            telephone TEXT,
             age INTEGER,
             antecedents_tabagiques TEXT,
             statut_implants TEXT,
@@ -590,7 +615,7 @@ def search():
     cur = conn.cursor()
 
     cur.execute(
-        """SELECT id, name, date_of_birth, adresse, age, antecedents_tabagiques,
+        """SELECT id, name, date_of_birth, adresse, telephone, age, antecedents_tabagiques,
         statut_implants, frequence_fil_dentaire, frequence_brossage,
         allergies, created_at
         FROM patients
@@ -785,7 +810,7 @@ def update_patient(patient_id):
     patient_name = data.get('name')
     try:
         allowed_columns = {
-            'name', 'date_of_birth', 'adresse', 'age',
+            'name', 'date_of_birth', 'adresse', 'age','telephone',
             'antecedents_tabagiques', 'statut_implants',
             'frequence_fil_dentaire', 'frequence_brossage', 'allergies'
         }
@@ -852,6 +877,7 @@ def migrate_database():
                     name TEXT NOT NULL, 
                     date_of_birth DATE, 
                     adresse TEXT, 
+                    telephone TEXT,
                     age INTEGER,
                     antecedents_tabagiques TEXT,
                     statut_implants TEXT,
@@ -866,7 +892,7 @@ def migrate_database():
             # Copy only the matching columns (adjust as needed)
             cur.execute('''
                 INSERT INTO patients (name, date_of_birth, adresse, age, created_at)
-                SELECT name, date_of_birth, adresse, age, created_at
+                SELECT name, date_of_birth, adresse, telephone, age, created_at
                 FROM patients_backup
             ''')
 

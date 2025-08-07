@@ -214,8 +214,8 @@
           <tr>
             <th class="p-4 text-left text-cyan-400 font-semibold uppercase text-xs tracking-wider">Date de création</th>
             <th class="p-4 text-left text-cyan-400 font-semibold uppercase text-xs tracking-wider">Nom</th>
-            <th class="p-4 text-left text-cyan-400 font-semibold uppercase text-xs tracking-wider">Date de naissance</th>
             <th class="p-4 text-left text-cyan-400 font-semibold uppercase text-xs tracking-wider">Adresse</th>
+            <th class="p-4 text-left text-cyan-400 font-semibold uppercase text-xs tracking-wider">Telephone</th>
             <th class="p-4 text-left text-cyan-400 font-semibold uppercase text-xs tracking-wider">Age</th>
             <th class="p-4 text-left text-cyan-400 font-semibold uppercase text-xs tracking-wider">Antécédents tabagiques</th>
             <th class="p-4 text-left text-cyan-400 font-semibold uppercase text-xs tracking-wider">Statut implants</th>
@@ -244,14 +244,13 @@
           <input name="adresse" placeholder="Adresse" class="input-field w-full p-4 rounded-xl">
           <div class="absolute left-0 bottom-0 h-0.5 w-0 bg-gradient-to-r from-cyan-400 to-purple-500 transition-all duration-300 input-underline"></div>
         </div>
-        
-        <div class="relative">
-          <input name="date_of_birth" type="date" class="input-field w-full p-4 rounded-xl">
-          <div class="absolute left-0 bottom-0 h-0.5 w-0 bg-gradient-to-r from-cyan-400 to-purple-500 transition-all duration-300 input-underline"></div>
-        </div>
-        
+
         <div class="relative">
           <input name="age" type="number" placeholder="Âge" class="input-field w-full p-4 rounded-xl">
+          <div class="absolute left-0 bottom-0 h-0.5 w-0 bg-gradient-to-r from-cyan-400 to-purple-500 transition-all duration-300 input-underline"></div>
+        </div>
+            <div class="relative">
+          <input name="telephone" type="text" placeholder="Numero de telephone" class="input-field w-full p-4 rounded-xl">
           <div class="absolute left-0 bottom-0 h-0.5 w-0 bg-gradient-to-r from-cyan-400 to-purple-500 transition-all duration-300 input-underline"></div>
         </div>
     
@@ -310,8 +309,7 @@
       </div>
     </div>
   </div>
-
-  <!-- Invoice Modal -->
+<!-- Invoice Modal -->
 <div id="invoiceModal" class="fixed inset-0 bg-black bg-opacity-70 backdrop-blur-sm flex items-center justify-center z-50" style="display: none !important;">
   <div class="card rounded-2xl p-8 max-w-4xl w-full max-h-screen overflow-y-auto scrollbar mx-4" onclick="event.stopPropagation()">
     <div class="flex justify-between items-center mb-6">
@@ -326,6 +324,20 @@
     <div id="invoice-items-container">
       <!-- Invoice items will be added here -->
     </div>
+
+    <!-- Insurance Percentage Selection -->
+<div class="mt-6 mb-4">
+  <label for="insuranceInput" class="block text-white mb-2">Pourcentage d'assurance (%)</label>
+  <input 
+    type="number" 
+    id="insuranceInput" 
+    class="w-full md:w-48 p-3 rounded-xl bg-black text-white border border-cyan-400" 
+    placeholder="80" 
+    min="0" 
+    max="100" 
+    step="1" 
+  />
+</div>
     
     <div class="flex justify-between items-center mt-6">
       <button type="button" onclick="addInvoiceItem()" class="px-6 py-3 bg-gray-600 hover:bg-gray-500 text-white rounded-xl transition-colors">
@@ -366,11 +378,14 @@
           <input id="edit_adresse" name="adresse" placeholder="Adresse" class="input-field w-full p-4 rounded-xl">
           <div class="absolute left-0 bottom-0 h-0.5 w-0 bg-gradient-to-r from-cyan-400 to-purple-500 transition-all duration-300 input-underline"></div>
         </div>
-        
+
         <div class="relative">
-          <input id="edit_date_of_birth" name="date_of_birth" type="date" class="input-field w-full p-4 rounded-xl">
+          <input id="edit_telephone" name="telephone" type="text" placeholder="Numero de telephone" class="input-field w-full p-4 rounded-xl">
           <div class="absolute left-0 bottom-0 h-0.5 w-0 bg-gradient-to-r from-cyan-400 to-purple-500 transition-all duration-300 input-underline"></div>
         </div>
+        
+        <div class="relative">
+
         
         <div class="relative">
           <input id="edit_age" name="age" type="number" placeholder="Age" class="input-field w-full p-4 rounded-xl">
@@ -475,7 +490,7 @@ function populateTable(data) {
     row.className = 'table-row hover:bg-opacity-10';
     
     // Updated fields array to match new dental-focused schema with creation date
-    const fields = ['name', 'date_of_birth', 'adresse', 'age', 'antecedents_tabagiques', 
+    const fields = ['name',  'adresse', 'telephone', 'age', 'antecedents_tabagiques', 
                     'statut_implants', 'frequence_fil_dentaire', 'frequence_brossage', 
                     'allergies', 'created_at'];
     
@@ -540,7 +555,7 @@ function populateTable(data) {
   document.getElementById('editId').value = patient.rowid || patient.id;
   document.getElementById('edit_name').value = patient.name || '';
   document.getElementById('edit_adresse').value = patient.adresse || '';
-  document.getElementById('edit_date_of_birth').value = patient.date_of_birth || '';
+  document.getElementById('edit_telephone').value = patient.telephone || '';
   document.getElementById('edit_age').value = patient.age || '';
   document.getElementById('edit_antecedents_tabagiques').value = patient.antecedents_tabagiques || '';
   document.getElementById('edit_statut_implants').value = patient.statut_implants || '';

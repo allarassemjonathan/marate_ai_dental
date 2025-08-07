@@ -82,69 +82,73 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   window.generateInvoice = function() {
-    if (!currentPatientId) {
-        alert('Erreur: Aucun patient sélectionné');
-        return;
+  if (!currentPatientId) {
+    alert('Erreur: Aucun patient sélectionné');
+    return;
+  }
+
+  const insuranceInput = document.getElementById('insuranceInput');
+  let insurance = parseInt(insuranceInput.value);
+  if (isNaN(insurance) || insurance < 0 || insurance > 100) {
+    alert('Veuillez entrer un pourcentage d\'assurance valide entre 0 et 100');
+    return;
+  }
+
+  // Collect all invoice items
+  const items = [];
+  const itemContainers = document.querySelectorAll('#invoice-items-container .grid');
+
+  itemContainers.forEach(container => {
+    const name = container.querySelector('.item-name').value.trim();
+    const quantity = container.querySelector('.item-quantity').value;
+    const price = container.querySelector('.item-price').value;
+
+    if (name && quantity && price) {
+      items.push({
+        name: name,
+        quantity: parseFloat(quantity),
+        price: parseFloat(price)
+      });
     }
-    
-    // Collect all invoice items
-    const items = [];
-    const itemContainers = document.querySelectorAll('#invoice-items-container .grid');
-    
-    itemContainers.forEach(container => {
-        const name = container.querySelector('.item-name').value.trim();
-        const quantity = container.querySelector('.item-quantity').value;
-        const price = container.querySelector('.item-price').value;
-        
-        if (name && quantity && price) {
-            items.push({
-                name: name,
-                quantity: parseFloat(quantity),
-                price: parseFloat(price)
-            });
-        }
-    });
-    
-    if (items.length === 0) {
-        alert('Veuillez ajouter au moins un article avec tous les champs remplis');
-        return;
+  });
+
+  if (items.length === 0) {
+    alert('Veuillez ajouter au moins un article avec tous les champs remplis');
+    return;
+  }
+
+  fetch(`/generate_invoice/${currentPatientId}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ items: items, insurance: insurance })
+  })
+  .then(response => {
+    if (response.ok) {
+      return response.blob();
+    } else {
+      throw new Error('Erreur lors de la génération du PDF');
     }
-    
-    // Send to server to generate PDF
-    fetch(`/generate_invoice/${currentPatientId}`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ items: items })
-    })
-    .then(response => {
-        if (response.ok) {
-            return response.blob();
-        } else {
-            throw new Error('Erreur lors de la génération du PDF');
-        }
-    })
-    .then(blob => {
-        // Create download link
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.style.display = 'none';
-        a.href = url;
-        a.download = `facture_${currentPatientId}_${new Date().toISOString().slice(0,10)}.pdf`;
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
-        
-        // Close modal
-        closeInvoiceModal();
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        alert('Erreur lors de la génération du PDF: ' + error.message);
-    });
-  };
+  })
+  .then(blob => {
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.style.display = 'none';
+    a.href = url;
+    a.download = `facture_${currentPatientId}_${new Date().toISOString().slice(0,10)}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+    closeInvoiceModal();
+  })
+  .catch(error => {
+    console.error('Error:', error);
+    alert('Erreur lors de la génération du PDF: ' + error.message);
+  });
+};
+
 
 function loadPatients(q = '') {
   fetch(`/search?q=${encodeURIComponent(q)}`)
@@ -152,6 +156,8 @@ function loadPatients(q = '') {
     .then(data => {
       console.log(data);
       resultsTable.innerHTML = '';
+      data.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      data = data.slice(0, 20);
       data.forEach(p => {
         const tr = document.createElement('tr');
         tr.className = "cursor-pointer hover:bg-gray-800 transition-colors";
@@ -168,7 +174,7 @@ function loadPatients(q = '') {
 
         // The rest of the fields
         [
-          'name', 'date_of_birth', 'adresse', 'age', 'antecedents_tabagiques', 
+          'name', 'adresse', 'telephone', 'age', 'antecedents_tabagiques', 
           'statut_implants', 'frequence_fil_dentaire', 'frequence_brossage', 'allergies'
         ].forEach(k => {
           const td = document.createElement('td');
@@ -178,7 +184,10 @@ function loadPatients(q = '') {
           if (k == 'date_of_birth' && typeof p[k] === 'string') {
             p[k] = new Date(p[k]).toISOString().split('T')[0];
           }
-          
+          if (k === 'created_at' && typeof p[k] === 'string') {
+            const date = new Date(p[k]);
+            p[k] = date.toISOString().replace('T', ' ').split('.')[0];
+          }
           let content = p[k] || '';
           if (content.length > 30) {
             content = content.substring(0, 30) + '...';
@@ -225,7 +234,7 @@ function loadPatients(q = '') {
         document.getElementById('editId').value = patient.id;
         
         // Updated fields array to match new schema
-        const fields = ['name', 'date_of_birth', 'adresse', 'age', 
+        const fields = ['name', 'adresse', 'age', 'telephone',
                         'antecedents_tabagiques', 'statut_implants', 'frequence_fil_dentaire', 
                         'frequence_brossage', 'allergies'];
         
