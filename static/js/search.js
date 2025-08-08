@@ -174,8 +174,7 @@ function loadPatients(q = '') {
 
         // The rest of the fields
         [
-          'name', 'adresse', 'telephone', 'age', 'antecedents_tabagiques', 
-          'statut_implants', 'frequence_fil_dentaire', 'frequence_brossage', 'allergies'
+          'name', 'adresse', 'telephone', 'age', 'dent', 'doit', 'recu', 'solde','docteur', 'nature_intervention'
         ].forEach(k => {
           const td = document.createElement('td');
           td.className = "p-2 border";
@@ -188,12 +187,14 @@ function loadPatients(q = '') {
             const date = new Date(p[k]);
             p[k] = date.toISOString().replace('T', ' ').split('.')[0];
           }
-          let content = p[k] || '';
-          if (content.length > 30) {
+
+          let content = (p[k] !== null && p[k] !== undefined) ? p[k] : '';
+          if (typeof content === 'string' && content.length > 30) {
             content = content.substring(0, 30) + '...';
           }
+
           td.textContent = content;
-          td.title = p[k] || '';
+          td.title = (p[k] !== null && p[k] !== undefined) ? p[k] : '';
           tr.appendChild(td);
         });
 
@@ -234,10 +235,9 @@ function loadPatients(q = '') {
         document.getElementById('editId').value = patient.id;
         
         // Updated fields array to match new schema
-        const fields = ['name', 'adresse', 'age', 'telephone',
-                        'antecedents_tabagiques', 'statut_implants', 'frequence_fil_dentaire', 
-                        'frequence_brossage', 'allergies'];
-        
+        const fields = [
+          'name', 'adresse', 'telephone', 'age', 'dent', 'doit', 'recu', 'solde','docteur', 'nature_intervention'
+        ]
         fields.forEach(field => {
           const input = document.getElementById(`edit_${field}`);
           if (input) {

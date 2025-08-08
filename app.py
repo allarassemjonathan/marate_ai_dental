@@ -446,7 +446,7 @@ def generate_invoice(patient_id):
         conn = get_db_connection()
         cur = conn.cursor()
         cur.execute(
-            'SELECT id, name, date_of_birth, adresse, telephone, age, antecedents_tabagiques, statut_implants, frequence_fil_dentaire, frequence_brossage, allergies, created_at FROM patients WHERE id = %s',
+            'SELECT id, name, date_of_birth, adresse, telephone, nature_intervention, age, dent, doit, recu, docteur, solde, antecedents_tabagiques, statut_implants, frequence_fil_dentaire, frequence_brossage, allergies, created_at FROM patients WHERE id = %s',
             (patient_id,)
         )
         patient = cur.fetchone()
@@ -549,11 +549,17 @@ def init_db():
             date_of_birth DATE,
             adresse TEXT,
             telephone TEXT,
+            dent TEXT, 
+            doit INTEGER, 
+            recu INTEGER, 
+            docteur TEXT, 
+            solde TEXT,
             age INTEGER,
             antecedents_tabagiques TEXT,
             statut_implants TEXT,
             frequence_fil_dentaire TEXT,
             frequence_brossage TEXT,
+            nature_intervention TEXT,
             allergies TEXT,
             created_at DATE
         )
@@ -615,9 +621,7 @@ def search():
     cur = conn.cursor()
 
     cur.execute(
-        """SELECT id, name, date_of_birth, adresse, telephone, age, antecedents_tabagiques,
-        statut_implants, frequence_fil_dentaire, frequence_brossage,
-        allergies, created_at
+        """SELECT id, name, date_of_birth, adresse, telephone, age, dent, doit, recu, docteur, solde,nature_intervention, created_at
         FROM patients
         WHERE name ILIKE %s OR adresse ILIKE %s""",
         tuple(f'%{q}%' for _ in range(2))
@@ -637,7 +641,7 @@ from datetime import date
 @app.route('/add', methods=['POST'])
 def add():
     data = request.get_json() or {}
-    print(data)
+    print(data.items())
     # List of known date fields in the table
     date_fields = {'name', 'adresse', 'date_of_birth'} #'taille', 'tension_arterielle', 'temperature', 'hypothese_de_diagnostique', 'bilan', 'resultat_bilan', 'signature', 'renseignements_clinique', 'ordonnance', 'created_at'}
 
@@ -802,9 +806,8 @@ def update_patient(patient_id):
     patient_name = data.get('name')
     try:
         allowed_columns = {
-            'name', 'date_of_birth', 'adresse', 'age','telephone',
-            'antecedents_tabagiques', 'statut_implants',
-            'frequence_fil_dentaire', 'frequence_brossage', 'allergies'
+            'name', 'date_of_birth', 'adresse', 'age','telephone','dent', 'doit', 'recu', 'docteur', 'solde',
+            'nature_intervention', 
         }
         filtered_data = {k: v for k, v in data.items() if k in allowed_columns}
         
@@ -875,6 +878,7 @@ def migrate_database():
                     statut_implants TEXT,
                     frequence_fil_dentaire TEXT,
                     frequence_brossage TEXT,
+                    nature_intervention TEXT,
                     allergies TEXT,
                     visit_date DATE,
                     created_at DATE
@@ -884,7 +888,7 @@ def migrate_database():
             # Copy only the matching columns (adjust as needed)
             cur.execute('''
                 INSERT INTO patients (name, date_of_birth, adresse, age, created_at)
-                SELECT name, date_of_birth, adresse, telephone, age, created_at
+                SELECT name, date_of_birth, adresse, telephone,nature_intervention, age, created_at
                 FROM patients_backup
             ''')
 

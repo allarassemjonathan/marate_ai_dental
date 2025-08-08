@@ -6,7 +6,7 @@
   </div>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Patients - Marate AI</title>
+  <title>Cabinet Renaissance - Information System</title>
   <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
@@ -211,16 +211,19 @@
         <table class="w-full table-auto border-collapse">
           <thead class="table-header">
           <tr>
+            <!--         const fields = ['name', 'adresse', 'telephone', 'age', 'antecedents_tabagiques', 'dent', 'doit', 'recu', 'docteur','solde',
+          'statut_implants', 'frequence_fil_dentaire', 'frequence_brossage', 'allergies']; -->
             <th class="p-4 text-left text-cyan-400 font-semibold uppercase text-xs tracking-wider">Date de création</th>
             <th class="p-4 text-left text-cyan-400 font-semibold uppercase text-xs tracking-wider">Nom</th>
             <th class="p-4 text-left text-cyan-400 font-semibold uppercase text-xs tracking-wider">Adresse</th>
             <th class="p-4 text-left text-cyan-400 font-semibold uppercase text-xs tracking-wider">Telephone</th>
             <th class="p-4 text-left text-cyan-400 font-semibold uppercase text-xs tracking-wider">Age</th>
-            <th class="p-4 text-left text-cyan-400 font-semibold uppercase text-xs tracking-wider">Antécédents tabagiques</th>
-            <th class="p-4 text-left text-cyan-400 font-semibold uppercase text-xs tracking-wider">Statut implants</th>
-            <th class="p-4 text-left text-cyan-400 font-semibold uppercase text-xs tracking-wider">Fréq. fil dentaire</th>
-            <th class="p-4 text-left text-cyan-400 font-semibold uppercase text-xs tracking-wider">Fréq. brossage</th>
-            <th class="p-4 text-left text-cyan-400 font-semibold uppercase text-xs tracking-wider">Allergies</th>
+            <th class="p-4 text-left text-cyan-400 font-semibold uppercase text-xs tracking-wider">Dent</th>
+            <th class="p-4 text-left text-cyan-400 font-semibold uppercase text-xs tracking-wider">Doit</th>
+            <th class="p-4 text-left text-cyan-400 font-semibold uppercase text-xs tracking-wider">reçu</th>
+            <th class="p-4 text-left text-cyan-400 font-semibold uppercase text-xs tracking-wider">solde</th>
+            <th class="p-4 text-left text-cyan-400 font-semibold uppercase text-xs tracking-wider">Docteur</th>
+            <th class="p-4 text-left text-cyan-400 font-semibold uppercase text-xs tracking-wider">Nature des interventions</th>
             <th class="p-4 text-center text-cyan-400 font-semibold uppercase text-xs tracking-wider">Action</th>
           </tr>
         </thead>
@@ -253,51 +256,39 @@
           <div class="absolute left-0 bottom-0 h-0.5 w-0 bg-gradient-to-r from-cyan-400 to-purple-500 transition-all duration-300 input-underline"></div>
         </div>
     
-        <div class="relative">
-          <select name="antecedents_tabagiques" class="input-field w-full p-4 rounded-xl">
-            <option value="">Antécédents tabagiques</option>
-            <option value="Non-fumeur">Non-fumeur</option>
-            <option value="Fumeur occasionnel">Fumeur occasionnel</option>
-            <option value="Fumeur régulier">Fumeur régulier</option>
-            <option value="Ex-fumeur">Ex-fumeur</option>
-          </select>
-          <div class="absolute left-0 bottom-0 h-0.5 w-0 bg-gradient-to-r from-cyan-400 to-purple-500 transition-all duration-300 input-underline"></div>
-        </div>
-        
-        <div class="relative">
-          <select name="statut_implants" class="input-field w-full p-4 rounded-xl">
-            <option value="">Statut des implants</option>
-            <option value="Aucun implant">Aucun implant</option>
-            <option value="Implants présents">Implants présents</option>
-            <option value="Implants prévus">Implants prévus</option>
-          </select>
-          <div class="absolute left-0 bottom-0 h-0.5 w-0 bg-gradient-to-r from-cyan-400 to-purple-500 transition-all duration-300 input-underline"></div>
-        </div>
-        
-        <div class="relative">
-          <select name="frequence_fil_dentaire" class="input-field w-full p-4 rounded-xl">
-            <option value="">Fréquence fil dentaire</option>
-            <option value="Jamais">Jamais</option>
-            <option value="Rarement">Rarement</option>
-            <option value="1-2 fois par semaine">1-2 fois par semaine</option>
-            <option value="Quotidiennement">Quotidiennement</option>
-          </select>
-          <div class="absolute left-0 bottom-0 h-0.5 w-0 bg-gradient-to-r from-cyan-400 to-purple-500 transition-all duration-300 input-underline"></div>
-        </div>
-        
-        <div class="relative">
-          <select name="frequence_brossage" class="input-field w-full p-4 rounded-xl">
-            <option value="">Fréquence brossage</option>
-            <option value="1 fois par jour">1 fois par jour</option>
-            <option value="2 fois par jour">2 fois par jour</option>
-            <option value="3 fois par jour">3 fois par jour</option>
-            <option value="Après chaque repas">Après chaque repas</option>
-          </select>
-          <div class="absolute left-0 bottom-0 h-0.5 w-0 bg-gradient-to-r from-cyan-400 to-purple-500 transition-all duration-300 input-underline"></div>
-        </div>
-        
         <div class="relative md:col-span-2">
-          <textarea name="allergies" placeholder="Allergies (médicaments, matériaux, etc.)" rows="3" class="input-field w-full p-4 rounded-xl resize-none"></textarea>
+          <textarea name="nature_intervention" placeholder="Nature des interventions ..." rows="3" class="input-field w-full p-4 rounded-xl resize-none"></textarea>
+          <div class="absolute left-0 bottom-0 h-0.5 w-0 bg-gradient-to-r from-cyan-400 to-purple-500 transition-all duration-300 input-underline"></div>
+        </div>
+
+        <div class="relative">
+          <input name="dent" type="text" placeholder="Dent numero ..." class="input-field w-full p-4 rounded-xl">
+          <div class="absolute left-0 bottom-0 h-0.5 w-0 bg-gradient-to-r from-cyan-400 to-purple-500 transition-all duration-300 input-underline"></div>
+        </div>
+
+        <div class="relative">
+          <input name="doit" type="number" placeholder="Le patient doit ..." class="input-field w-full p-4 rounded-xl">
+          <div class="absolute left-0 bottom-0 h-0.5 w-0 bg-gradient-to-r from-cyan-400 to-purple-500 transition-all duration-300 input-underline"></div>
+        </div>
+
+        <div class="relative">
+          <input name="recu" type="number" placeholder="Le cabinet a reçu ... " class="input-field w-full p-4 rounded-xl">
+          <div class="absolute left-0 bottom-0 h-0.5 w-0 bg-gradient-to-r from-cyan-400 to-purple-500 transition-all duration-300 input-underline"></div>
+        </div>
+
+        <div class="relative">
+          <input name="solde" type="number" placeholder="solde" class="input-field w-full p-4 rounded-xl">
+          <div class="absolute left-0 bottom-0 h-0.5 w-0 bg-gradient-to-r from-cyan-400 to-purple-500 transition-all duration-300 input-underline"></div>
+        </div>
+
+        <div class="relative">
+          <select name="docteur" class="input-field w-full p-4 rounded-xl">
+            <option value="">Docteur</option>
+            <option value="Docteur Nimaga">Docteur Nimaga</option>
+            <option value="Docteur Soumaré">Docteur Soumaré</option>
+            <option value="Docteur Marc">Docteur Marc</option>
+            <option value="Docteur Ibrahima">Docteur Ibrahima</option>
+          </select>
           <div class="absolute left-0 bottom-0 h-0.5 w-0 bg-gradient-to-r from-cyan-400 to-purple-500 transition-all duration-300 input-underline"></div>
         </div>
         
@@ -384,7 +375,11 @@
         </div>
         
         <div class="relative">
+          <input id="edit_dent" name="dent" type="text" placeholder="Dent ..." class="input-field w-full p-4 rounded-xl">
+          <div class="absolute left-0 bottom-0 h-0.5 w-0 bg-gradient-to-r from-cyan-400 to-purple-500 transition-all duration-300 input-underline"></div>
+        </div>
 
+        <div class="relative">
         
         <div class="relative">
           <input id="edit_age" name="age" type="number" placeholder="Age" class="input-field w-full p-4 rounded-xl">
@@ -392,50 +387,33 @@
         </div>
         
         <div class="relative">
-          <select id="edit_antecedents_tabagiques" name="antecedents_tabagiques" class="input-field w-full p-4 rounded-xl">
-            <option value="">Antécédents tabagiques</option>
-            <option value="Non-fumeur">Non-fumeur</option>
-            <option value="Fumeur occasionnel">Fumeur occasionnel</option>
-            <option value="Fumeur régulier">Fumeur régulier</option>
-            <option value="Ex-fumeur">Ex-fumeur</option>
-          </select>
+          <input id="edit_doit" name="doit" type="number" placeholder="Doit ... " class="input-field w-full p-4 rounded-xl">
           <div class="absolute left-0 bottom-0 h-0.5 w-0 bg-gradient-to-r from-cyan-400 to-purple-500 transition-all duration-300 input-underline"></div>
         </div>
-        
+
         <div class="relative">
-          <select id="edit_statut_implants" name="statut_implants" class="input-field w-full p-4 rounded-xl">
-            <option value="">Statut des implants</option>
-            <option value="Aucun implant">Aucun implant</option>
-            <option value="Implants présents">Implants présents</option>
-            <option value="Implants prévus">Implants prévus</option>
-          </select>
+          <input id="edit_recu" name="recu" type="number" placeholder="Reçu ... " class="input-field w-full p-4 rounded-xl">
           <div class="absolute left-0 bottom-0 h-0.5 w-0 bg-gradient-to-r from-cyan-400 to-purple-500 transition-all duration-300 input-underline"></div>
         </div>
-        
+
         <div class="relative">
-          <select id="edit_frequence_fil_dentaire" name="frequence_fil_dentaire" class="input-field w-full p-4 rounded-xl">
-            <option value="">Fréquence fil dentaire</option>
-            <option value="Jamais">Jamais</option>
-            <option value="Rarement">Rarement</option>
-            <option value="1-2 fois par semaine">1-2 fois par semaine</option>
-            <option value="Quotidiennement">Quotidiennement</option>
-          </select>
+          <input id="edit_solde" name="solde" type="number" placeholder="Solde ... " class="input-field w-full p-4 rounded-xl">
           <div class="absolute left-0 bottom-0 h-0.5 w-0 bg-gradient-to-r from-cyan-400 to-purple-500 transition-all duration-300 input-underline"></div>
         </div>
-        
-        <div class="relative">
-          <select id="edit_frequence_brossage" name="frequence_brossage" class="input-field w-full p-4 rounded-xl">
-            <option value="">Fréquence brossage</option>
-            <option value="1 fois par jour">1 fois par jour</option>
-            <option value="2 fois par jour">2 fois par jour</option>
-            <option value="3 fois par jour">3 fois par jour</option>
-            <option value="Après chaque repas">Après chaque repas</option>
-          </select>
-          <div class="absolute left-0 bottom-0 h-0.5 w-0 bg-gradient-to-r from-cyan-400 to-purple-500 transition-all duration-300 input-underline"></div>
-        </div>
-        
+      
         <div class="relative sm:col-span-2">
-          <textarea id="edit_allergies" name="allergies" placeholder="Allergies (médicaments, matériaux, etc.)" rows="3" class="input-field w-full p-4 rounded-xl resize-none"></textarea>
+          <textarea id="edit_nature_intervention" name="nature_intervention" placeholder="Nature des interventions ..." rows="3" class="input-field w-full p-4 rounded-xl resize-none"></textarea>
+          <div class="absolute left-0 bottom-0 h-0.5 w-0 bg-gradient-to-r from-cyan-400 to-purple-500 transition-all duration-300 input-underline"></div>
+        </div>
+
+        <div class="relative">
+          <select id="edit_docteur" name="docteur" class="input-field w-full p-4 rounded-xl">
+            <option value="">Docteur</option>
+            <option value="Docteur Nimaga">Docteur Nimaga</option>
+            <option value="Docteur Soumaré">Docteur Soumaré</option>
+            <option value="Docteur Marc">Docteur Marc</option>
+            <option value="Docteur Ibrahima">Docteur Ibrahima</option>
+          </select>
           <div class="absolute left-0 bottom-0 h-0.5 w-0 bg-gradient-to-r from-cyan-400 to-purple-500 transition-all duration-300 input-underline"></div>
         </div>
         
@@ -489,9 +467,8 @@ function populateTable(data) {
     row.className = 'table-row hover:bg-opacity-10';
     
     // Updated fields array to match new dental-focused schema with creation date
-    const fields = ['name',  'adresse', 'telephone', 'age', 'antecedents_tabagiques', 
-                    'statut_implants', 'frequence_fil_dentaire', 'frequence_brossage', 
-                    'allergies', 'created_at'];
+    const fields = ['name',  'adresse', 'telephone', 'age', 'docteur',
+                    'nature_intervention', 'created_at'];
     
     fields.forEach(field => {
       const cell = document.createElement('td');
@@ -556,13 +533,19 @@ function populateTable(data) {
   document.getElementById('edit_adresse').value = patient.adresse || '';
   document.getElementById('edit_telephone').value = patient.telephone || '';
   document.getElementById('edit_age').value = patient.age || '';
-  document.getElementById('edit_antecedents_tabagiques').value = patient.antecedents_tabagiques || '';
-  document.getElementById('edit_statut_implants').value = patient.statut_implants || '';
-  document.getElementById('edit_frequence_fil_dentaire').value = patient.frequence_fil_dentaire || '';
-  document.getElementById('edit_frequence_brossage').value = patient.frequence_brossage || '';
-  document.getElementById('edit_allergies').value = patient.allergies || '';
-  
+  document.getElementById('edit_dent').value = patient.dent || '';
+  document.getElementById('edit_doit').value = patient.doit || '';
+  document.getElementById('edit_recu').value = patient.recu || '';
+  if (document.getElementById('edit_solde').value == None){
+    document.getElementById('edit_solde').value = '';
+  }
+  document.getElementById('edit_docteur').value = patient.docteur || '';
+  if (document.getElementById('edit_nature_intervention').value == None){
+    document.getElementById('edit_nature_intervention').value = '';
+  }
+  document.getElementById('edit_nature_intervention').value = patient.nature_intervention;
   // Show modal
+  
   document.getElementById('editModalOverlay').classList.remove('hidden');
 }
     
