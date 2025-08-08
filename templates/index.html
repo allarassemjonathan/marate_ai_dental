@@ -218,6 +218,7 @@
             <th class="p-4 text-left text-cyan-400 font-semibold uppercase text-xs tracking-wider">Adresse</th>
             <th class="p-4 text-left text-cyan-400 font-semibold uppercase text-xs tracking-wider">Telephone</th>
             <th class="p-4 text-left text-cyan-400 font-semibold uppercase text-xs tracking-wider">Age</th>
+            <th class="p-4 text-left text-cyan-400 font-semibold uppercase text-xs tracking-wider">Profession</th>
             <th class="p-4 text-left text-cyan-400 font-semibold uppercase text-xs tracking-wider">Dent</th>
             <th class="p-4 text-left text-cyan-400 font-semibold uppercase text-xs tracking-wider">Doit</th>
             <th class="p-4 text-left text-cyan-400 font-semibold uppercase text-xs tracking-wider">reçu</th>
@@ -251,8 +252,14 @@
           <input name="age" type="number" placeholder="Âge" class="input-field w-full p-4 rounded-xl">
           <div class="absolute left-0 bottom-0 h-0.5 w-0 bg-gradient-to-r from-cyan-400 to-purple-500 transition-all duration-300 input-underline"></div>
         </div>
-            <div class="relative">
+
+        <div class="relative">
           <input name="telephone" type="text" placeholder="Numero de telephone" class="input-field w-full p-4 rounded-xl">
+          <div class="absolute left-0 bottom-0 h-0.5 w-0 bg-gradient-to-r from-cyan-400 to-purple-500 transition-all duration-300 input-underline"></div>
+        </div>
+
+        <div class="relative">
+          <input name="profession" type="text" placeholder="Profession ... " class="input-field w-full p-4 rounded-xl">
           <div class="absolute left-0 bottom-0 h-0.5 w-0 bg-gradient-to-r from-cyan-400 to-purple-500 transition-all duration-300 input-underline"></div>
         </div>
     
@@ -284,6 +291,7 @@
         <div class="relative">
           <select name="docteur" class="input-field w-full p-4 rounded-xl">
             <option value="">Docteur</option>
+            <option value="Docteur Sacko">Docteur Sacko</option>
             <option value="Docteur Nimaga">Docteur Nimaga</option>
             <option value="Docteur Soumaré">Docteur Soumaré</option>
             <option value="Docteur Marc">Docteur Marc</option>
@@ -371,6 +379,11 @@
 
         <div class="relative">
           <input id="edit_telephone" name="telephone" type="text" placeholder="Numero de telephone" class="input-field w-full p-4 rounded-xl">
+          <div class="absolute left-0 bottom-0 h-0.5 w-0 bg-gradient-to-r from-cyan-400 to-purple-500 transition-all duration-300 input-underline"></div>
+        </div>
+
+        <div class="relative">
+          <input id="edit_profession" name="profession" type="text" placeholder="Profession ..." class="input-field w-full p-4 rounded-xl">
           <div class="absolute left-0 bottom-0 h-0.5 w-0 bg-gradient-to-r from-cyan-400 to-purple-500 transition-all duration-300 input-underline"></div>
         </div>
         
@@ -532,6 +545,7 @@ function populateTable(data) {
   document.getElementById('edit_name').value = patient.name || '';
   document.getElementById('edit_adresse').value = patient.adresse || '';
   document.getElementById('edit_telephone').value = patient.telephone || '';
+  document.getElementById('edit_profession').value = patient.profession || '';
   document.getElementById('edit_age').value = patient.age || '';
   document.getElementById('edit_dent').value = patient.dent || '';
   document.getElementById('edit_doit').value = patient.doit || '';

@@ -621,7 +621,7 @@ def search():
     cur = conn.cursor()
 
     cur.execute(
-        """SELECT id, name, date_of_birth, adresse, telephone, age, dent, doit, recu, docteur, solde,nature_intervention, created_at
+        """SELECT id, name, date_of_birth, adresse, profession, telephone, age, dent, doit, recu, docteur, solde,nature_intervention, created_at
         FROM patients
         WHERE name ILIKE %s OR adresse ILIKE %s""",
         tuple(f'%{q}%' for _ in range(2))
@@ -806,7 +806,7 @@ def update_patient(patient_id):
     patient_name = data.get('name')
     try:
         allowed_columns = {
-            'name', 'date_of_birth', 'adresse', 'age','telephone','dent', 'doit', 'recu', 'docteur', 'solde',
+            'name', 'date_of_birth', 'adresse','profession', 'age','telephone','dent', 'doit', 'recu', 'docteur', 'solde',
             'nature_intervention', 
         }
         filtered_data = {k: v for k, v in data.items() if k in allowed_columns}
@@ -872,6 +872,7 @@ def migrate_database():
                     name TEXT NOT NULL, 
                     date_of_birth DATE, 
                     adresse TEXT, 
+                    profession TEXT, 
                     telephone TEXT,
                     age INTEGER,
                     antecedents_tabagiques TEXT,
@@ -888,7 +889,7 @@ def migrate_database():
             # Copy only the matching columns (adjust as needed)
             cur.execute('''
                 INSERT INTO patients (name, date_of_birth, adresse, age, created_at)
-                SELECT name, date_of_birth, adresse, telephone,nature_intervention, age, created_at
+                SELECT name, date_of_birth, adresse, profession, telephone,nature_intervention, age, created_at
                 FROM patients_backup
             ''')
 

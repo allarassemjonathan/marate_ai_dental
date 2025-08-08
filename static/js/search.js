@@ -174,7 +174,7 @@ function loadPatients(q = '') {
 
         // The rest of the fields
         [
-          'name', 'adresse', 'telephone', 'age', 'dent', 'doit', 'recu', 'solde','docteur', 'nature_intervention'
+          'name', 'adresse', 'telephone', 'age', 'profession', 'dent', 'doit', 'recu', 'solde','docteur', 'nature_intervention'
         ].forEach(k => {
           const td = document.createElement('td');
           td.className = "p-2 border";
@@ -236,7 +236,7 @@ function loadPatients(q = '') {
         
         // Updated fields array to match new schema
         const fields = [
-          'name', 'adresse', 'telephone', 'age', 'dent', 'doit', 'recu', 'solde','docteur', 'nature_intervention'
+          'name', 'adresse', 'telephone', 'age', 'profession', 'dent', 'doit', 'recu', 'solde','docteur', 'nature_intervention'
         ]
         fields.forEach(field => {
           const input = document.getElementById(`edit_${field}`);
