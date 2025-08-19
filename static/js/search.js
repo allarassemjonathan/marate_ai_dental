@@ -184,8 +184,8 @@ function loadPatients(q = '') {
             p[k] = new Date(p[k]).toISOString().split('T')[0];
           }
           if (k === 'created_at' && typeof p[k] === 'string') {
-            const date = new Date(p[k]);
-            p[k] = date.toISOString().replace('T', ' ').split('.')[0];
+            const d = new Date(p[k]);
+            p[k] = d.toISOString().split('T')[0]; // outputs "2025-08-19"
           }
 
           let content = (p[k] !== null && p[k] !== undefined) ? p[k] : '';

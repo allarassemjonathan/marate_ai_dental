@@ -553,7 +553,7 @@ def init_db():
             doit INTEGER, 
             recu INTEGER, 
             docteur TEXT, 
-            solde TEXT,
+            solde INTEGER,
             age INTEGER,
             antecedents_tabagiques TEXT,
             statut_implants TEXT,
@@ -630,6 +630,7 @@ def search():
 
     # Get column names for dict conversion
     rows = [dict(row) for row in rows]
+    print('rows', rows)
     conn.close()
     return jsonify(rows)
 
@@ -653,7 +654,7 @@ def add():
         else:
             cleaned_data[k] = v
 
-    data = cleaned_data
+    data = cleaned_data 
     if not data.get('name'):
         print('issue is here 1 ')
         return jsonify({'status': 'error', 'message': 'Name is required'}), 400
@@ -663,7 +664,7 @@ def add():
         data['created_at'] = datetime.now(gmt)
 
         # Fields that should be treated as floats in the DB
-        float_fields = {'age'}
+        float_fields = {'age', 'recu', 'doit', 'solde'}
 
         for field in float_fields:
             print(field)
